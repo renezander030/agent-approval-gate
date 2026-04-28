@@ -95,6 +95,7 @@ agent-approval-gate/
 
 ## Related work
 
+- [Production AI Automation Notes #1: Agent Approval Gates](https://gist.github.com/renezander030/9069db775e494ffd2cdd5a09adf83add) — the long-form essay companion to this repo. Walks the five contracts in detail with code samples.
 - [CLAUDE.md — 10 rules for Claude Code, edit-time and runtime](https://gist.github.com/renezander030/2898eb5f0100688f4197b5e493e156a2) — the runtime rules (#7 HITL, #8 schema validation) are the same discipline applied inside Claude Code.
 - [Context7 v2 — enterprise GraphQL MCP pattern](https://gist.github.com/renezander030/83ad49aeffa5f8749325a2b19617823f) — what changes when an MCP server can write, not just read. Approval envelopes show up there too.
 - [fixclaw](https://github.com/renezander030/fixclaw) — Go pipeline engine that enforces the runtime rules in production.
