@@ -1,0 +1,62 @@
+{
+  "name": "agent-approval-gate (reference)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agent-proposal",
+        "options": {}
+      },
+      "name": "Webhook: ProposedAction in",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "agent-proposal"
+    },
+    {
+      "parameters": {
+        "functionCode": "const a = $json.body || $json;\nconst required = ['proposal_id','agent','action_type','payload','created_at','tenant'];\nfor (const k of required) {\n  if (!(k in a)) throw new Error('ProposedAction missing field: ' + k);\n}\nconst allowed = ['email.send','crm.update_record','ticket.create','db.update_row','api.call','n8n.trigger_workflow'];\nif (!allowed.includes(a.action_type)) throw new Error('Unknown action_type: ' + a.action_type);\nif (a.expires_at && new Date(a.expires_at) < new Date()) throw new Error('Proposal already expired');\nreturn [{json: a}];"
+      },
+      "name": "Validate against schema",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$env.TG_APPROVER_CHAT_ID}}",
+        "text": "=*Proposed action:* `{{$json.action_type}}`\n*Tenant:* `{{$json.tenant}}`\n*Agent:* `{{$json.agent.name}}` v{{$json.agent.version}}\n*Risk:* {{$json.risk || 'unspecified'}}\n*Expires:* {{$json.expires_at || 'never'}}\n\n*Rationale:*\n{{$json.rationale}}\n\n*Payload:*\n```\n{{JSON.stringify($json.payload, null, 2)}}\n```\n\nReply `approve {{$json.proposal_id}}` or `reject {{$json.proposal_id}}` to decide.",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "name": "Send to approver (Telegram)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const proposal = $json;\nconst record = {\n  event: 'proposed',\n  proposal_id: proposal.proposal_id,\n  tenant: proposal.tenant,\n  action_type: proposal.action_type,\n  agent: proposal.agent,\n  payload: proposal.payload,\n  rationale: proposal.rationale,\n  created_at: proposal.created_at,\n  logged_at: new Date().toISOString()\n};\nreturn [{json: record}];"
+      },
+      "name": "Append to audit log",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: ProposedAction in": {
+      "main": [[{ "node": "Validate against schema", "type": "main", "index": 0 }]]
+    },
+    "Validate against schema": {
+      "main": [[{ "node": "Send to approver (Telegram)", "type": "main", "index": 0 }]]
+    },
+    "Send to approver (Telegram)": {
+      "main": [[{ "node": "Append to audit log", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "tags": ["agent-approval-gate", "ai-automation"]
+}

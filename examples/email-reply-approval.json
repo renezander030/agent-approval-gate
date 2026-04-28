@@ -1,0 +1,24 @@
+{
+  "proposal_id": "prop_2026-04-28_b3f1a2c4",
+  "agent": {
+    "name": "support-triage-agent",
+    "version": "1.4.2",
+    "model": "claude-opus-4-7",
+    "run_id": "run_5f9e2c"
+  },
+  "action_type": "email.send",
+  "payload": {
+    "from": "support@acme-corp.example",
+    "to": ["customer@example.com"],
+    "cc": [],
+    "subject": "Re: cannot export invoices for March",
+    "body_text": "Hi,\n\nThanks for the report. The export endpoint was rate-limited above the documented threshold last week — we've raised it back to 50 req/min. Please retry the March export and let us know if it still fails.\n\nIf you need the data sooner, I can run the export on our side and email you the CSV directly.\n\nBest,\nSupport",
+    "in_reply_to_message_id": "<CADx7HnZ@example.com>",
+    "ticket_id": "ZD-48211"
+  },
+  "rationale": "Customer's export issue maps to the documented rate-limit incident from 2026-04-22 (internal-postmortem-2026-04-22). The rate limit was reverted on 2026-04-23. Recommended action: confirm fix and offer manual export as fallback.",
+  "created_at": "2026-04-28T09:14:23Z",
+  "tenant": "acme-corp",
+  "expires_at": "2026-04-28T17:14:23Z",
+  "risk": "low"
+}

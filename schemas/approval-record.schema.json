@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/renezander030/agent-approval-gate/schemas/approval-record.schema.json",
+  "title": "ApprovalRecord",
+  "description": "The decision a human (or policy) made on a ProposedAction. Append-only — never mutated after write.",
+  "type": "object",
+  "required": ["proposal_id", "decision", "decided_by", "decided_at", "channel"],
+  "additionalProperties": false,
+  "properties": {
+    "proposal_id": {
+      "type": "string",
+      "description": "Foreign key to ProposedAction.proposal_id.",
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "minLength": 8,
+      "maxLength": 64
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["approved", "rejected", "expired", "auto_approved"],
+      "description": "Outcome of the approval step. `expired` means the proposal was not decided before expires_at. `auto_approved` means a policy rule (e.g. low-risk + tenant whitelist) approved without human input — log it the same way."
+    },
+    "decided_by": {
+      "type": "object",
+      "description": "Who made the decision. For auto_approved, set kind='policy' and identifier to the policy name.",
+      "required": ["kind", "identifier"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "enum": ["human", "policy"] },
+        "identifier": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "display_name": { "type": "string", "maxLength": 128 }
+      }
+    },
+    "decided_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "channel": {
+      "type": "string",
+      "enum": ["telegram", "slack", "email", "web", "n8n_form", "policy"],
+      "description": "Where the approval came in. Audit-relevant — different channels have different trust levels."
+    },
+    "comment": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "Optional free-text from the approver. Surfaced in the audit log."
+    },
+    "modifications": {
+      "type": "object",
+      "description": "Optional. If the approver edited the payload before approving, record the diff here. Dispatcher uses the modified payload, not the original."
+    },
+    "signature": {
+      "type": "string",
+      "description": "Optional. HMAC or signature of (proposal_id || decision || decided_by || decided_at) using a per-tenant key. Required for high-risk actions on untrusted channels."
+    }
+  }
+}
