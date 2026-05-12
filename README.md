@@ -93,6 +93,10 @@ agent-approval-gate/
 - Not coupled to one LLM, one orchestrator, or one approval channel.
 - Not a turnkey solution for high-frequency dispatch. If your agent ships 10k actions/hour, this pattern is the *floor*, not the ceiling — bolt on rate limits, batching, and write-side tenancy.
 
+## Related gates
+
+- [agentproof-react](https://github.com/renezander030/agentproof-react) — the same gated-workflow idea applied to AI-generated React and Next.js code. Instead of approving side effects, it blocks common frontend shipping failures with deterministic checks.
+
 ## Related work
 
 - [Production AI Automation Notes #1: Agent Approval Gates](https://gist.github.com/renezander030/9069db775e494ffd2cdd5a09adf83add) — the long-form essay companion to this repo. Walks the five contracts in detail with code samples.
