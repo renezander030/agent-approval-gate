@@ -95,7 +95,7 @@ agent-approval-gate/
 
 ## Related gates
 
-- [agentproof-react](https://github.com/renezander030/agentproof-react) — the same gated-workflow idea applied to AI-generated React and Next.js code. Instead of approving side effects, it blocks common frontend shipping failures with deterministic checks.
+- [skillgate](https://github.com/renezander030/skillgate) — the deterministic-gate idea applied to the **dev finish line**: it blocks `git commit` / `push` / `publish` (in opencode, Claude Code, pre-commit, CI) until your definition-of-done passes. This repo gates real-world *actions* behind human approval and an audit log; skillgate gates *"is the work actually done?"* with a script. Different boundary, same principle: a check the agent cannot route around.
 
 ## Related work
 
