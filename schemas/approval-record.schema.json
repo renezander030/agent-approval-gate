@@ -5,6 +5,9 @@
   "description": "The decision a human (or policy) made on a ProposedAction. Append-only — never mutated after write.",
   "type": "object",
   "required": ["proposal_id", "decision", "decided_by", "decided_at", "channel"],
+  "dependentRequired": {
+    "signature": ["payload_hash"]
+  },
   "additionalProperties": false,
   "properties": {
     "proposal_id": {
@@ -48,9 +51,14 @@
       "type": "object",
       "description": "Optional. If the approver edited the payload before approving, record the diff here. Dispatcher uses the modified payload, not the original."
     },
+    "payload_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Hash of the exact payload the approver decided on: the effective payload, meaning ProposedAction.payload with `modifications` already applied. Canonicalize with RFC 8785 (JCS), sha256 it, prefix `sha256:` and lowercase-hex it. The dispatcher recomputes this over the payload it is about to execute and refuses on mismatch. Required whenever `signature` is present."
+    },
     "signature": {
       "type": "string",
-      "description": "Optional. HMAC or signature of (proposal_id || decision || decided_by || decided_at) using a per-tenant key. Required for high-risk actions on untrusted channels."
+      "description": "Optional. HMAC or signature over the RFC 8785 canonicalization of {proposal_id, decision, decided_by, decided_at, payload_hash}, using a per-tenant key. Required for high-risk actions on untrusted channels. payload_hash is inside the signed object on purpose: signing the decision alone binds who decided, not what they decided on, so the payload can be swapped under an unchanged proposal_id and every signature still verifies."
     }
   }
 }

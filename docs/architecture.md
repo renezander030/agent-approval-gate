@@ -27,9 +27,13 @@ Approvals are not a flag on the proposal. They are a separate, append-only recor
 - Multiple approvers are required (e.g. high-risk actions). Each approver writes their own record.
 - A policy auto-approves under a rule. The record names the rule (`decided_by.kind = "policy"`, `identifier = "low-risk-internal-tenant"`), not a human.
 
+**Bind the record to the payload, not just to the proposal.** `proposal_id` is an indirection, so a record that carries only the id says "someone approved proposal X" without saying what X contained at the time. If anything between approve and dispatch rewrites the payload under an unchanged id (a queue retry, a partial re-draft, a compromised worker), the record still looks valid and the signature still verifies. Close it with `payload_hash`: canonicalize the effective payload with RFC 8785, sha256 it, and store the digest on the record. "Effective" means after `modifications` are applied, because that is what the approver actually saw and what the dispatcher will actually run. When a signature is present, the hash goes inside the signed object, otherwise you have signed the decision and left the bytes loose.
+
 ### 4. Dispatcher — plain code, no model
 
 The dispatcher reads `(ProposedAction, ApprovalRecord)`, re-validates both, and executes the side effect. It is intentionally boring code. No prompt, no model call, no chain-of-thought.
+
+Before it executes, it runs one more check: recompute `payload_hash` over the payload it is about to send, and compare it to the hash on the `ApprovalRecord`. Mismatch is a hard refusal, logged as `not_dispatched` with reason `payload_hash_mismatch`. Never a warning, never a best-effort dispatch. This is the step that makes the approval bind to bytes instead of to a row id, and it costs one hash.
 
 If you find yourself wanting the model to "decide how to dispatch," that is a sign the action_type enum is too coarse. Split it into more specific types instead of asking the model to branch.
 
@@ -59,8 +63,11 @@ Approval channels in rough order of trust → friction:
 
 A signature on the `ApprovalRecord` is mandatory for high-risk actions on Telegram and email — both can be spoofed. For Slack with signed-buttons or an authenticated web UI, the channel itself provides the signature.
 
+`payload_hash` is a separate question from the signature and applies on every channel, including the high-trust ones. The signature answers "was this decision authentic". The hash answers "was this the thing decided on". A trusted channel gives you the first for free and none of the second, because the mutation you are defending against happens after the approver clicks, on your side of the boundary.
+
 ## What this pattern explicitly does not do
 
 - **It does not prevent prompt injection.** That is a different layer (input sanitization, system-prompt isolation). The gate stops a *successful* injection from causing real-world damage; it does not stop the injection from happening.
 - **It does not replace rate limits or budget caps.** A pipeline that drafts 10,000 proposals/minute will overwhelm the approver. Cap drafts at the source.
 - **It does not handle compensation.** If a dispatched action turns out to be wrong, the gate does not roll it back. Plan rollback per action_type.
+- **It does not give you third-party-verifiable proof of approval.** The signature uses a per-tenant key that the platform holds, so the evidence and the executor sit inside the same trust boundary. That is enough to answer "did the agent do something nobody approved", which is the dispute that actually shows up. It is not enough if the approver themself is the contested party, because whoever holds the key could have written the record. Answering that needs a signature held by the person rather than the platform (passkey or similar), on a channel that can carry one, which rules out email and Telegram. `payload_hash` is orthogonal and worth having either way: it is what a per-person signature would have to cover anyway.

@@ -48,7 +48,7 @@ Five contracts:
 
 1. **ProposedAction** — what the agent wants to do, fully serialized, no executable code.
 2. **Schema validation** — every action type has a JSON Schema. Reject at the boundary.
-3. **ApprovalRecord** — who approved, when, on what channel. Signed if the channel supports it.
+3. **ApprovalRecord** — who approved, when, on what channel, and a hash of the exact payload they approved. Signed if the channel supports it.
 4. **Dispatcher** — plain code (not the agent) executes the action. The agent never calls the side-effect API directly.
 5. **Audit log** — append-only record linking proposal → approval → dispatch outcome.
 
@@ -74,6 +74,7 @@ agent-approval-gate/
 │   └── approval-record.schema.json           — the approval decision
 ├── examples/
 │   ├── email-reply-approval.json             — example proposed action
+│   ├── email-reply-approval-record.json      — the matching approval record, payload_hash included
 │   └── n8n-approval-workflow.json            — importable n8n workflow
 ├── docs/
 │   └── architecture.md                       — long-form rationale
@@ -86,6 +87,7 @@ agent-approval-gate/
 2. Adopt `schemas/proposed-action.schema.json` as the contract between your agent and your dispatcher. Reject drafts that don't validate.
 3. Wire one approval channel (Telegram bot, Slack DM, n8n form, internal web UI). The example `examples/n8n-approval-workflow.json` shows the simplest version.
 4. Append a log entry per proposal, per approval, per dispatch. Three rows minimum, not one.
+5. Record a `payload_hash` on every `ApprovalRecord`, and have the dispatcher recompute it before it fires. `proposal_id` alone binds the approval to a row, not to the bytes that row held at approval time. `examples/email-reply-approval-record.json` shows the shape.
 
 ## What this repo is NOT
 
