@@ -1,0 +1,23 @@
+{
+  "proposal_id": "prop_2026-04-28_9d7e0f13",
+  "decision": "rejected",
+  "decided_by": {
+    "kind": "human",
+    "identifier": "rene@acme-corp.example",
+    "display_name": "Rene Z."
+  },
+  "decided_at": "2026-04-28T09:16:05Z",
+  "recorded_at": "2026-04-28T09:21:44Z",
+  "channel": "email",
+  "comment": "Wrong account. This is the parent company, not the subsidiary that raised the ticket.",
+  "rejection_settlement": {
+    "state": "verified_clean",
+    "verified_by": {
+      "kind": "probe",
+      "identifier": "crm-writeback-probe"
+    },
+    "verified_at": "2026-04-28T09:22:10Z",
+    "note": "Polled the CRM record after the decision landed. No write present, so the reply that raced the rejection did not dispatch."
+  },
+  "payload_hash": "sha256:4d2f6b7c1e08a35d9f0c2b84e7a15d63c8e94f207b1a6d3e5c0f8927ab4361de"
+}
