@@ -75,6 +75,7 @@ agent-approval-gate/
 ├── examples/
 │   ├── email-reply-approval.json             — example proposed action
 │   ├── email-reply-approval-record.json      — the matching approval record, payload_hash included
+│   ├── rejected-with-settlement-approval-record.json — a rejection plus proof the effect never landed
 │   └── n8n-approval-workflow.json            — importable n8n workflow
 ├── docs/
 │   └── architecture.md                       — long-form rationale

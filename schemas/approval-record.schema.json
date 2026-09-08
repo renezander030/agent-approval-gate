@@ -2,11 +2,19 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/renezander030/agent-approval-gate/schemas/approval-record.schema.json",
   "title": "ApprovalRecord",
-  "description": "The decision a human (or policy) made on a ProposedAction. Append-only — never mutated after write.",
+  "description": "The decision a human (or policy) made on a ProposedAction. Append-only — never mutated after write. A rejection additionally carries whether the side effect is known not to have landed.",
   "type": "object",
-  "required": ["proposal_id", "decision", "decided_by", "decided_at", "channel"],
+  "required": [
+    "proposal_id",
+    "decision",
+    "decided_by",
+    "decided_at",
+    "channel"
+  ],
   "dependentRequired": {
-    "signature": ["payload_hash"]
+    "signature": [
+      "payload_hash"
+    ]
   },
   "additionalProperties": false,
   "properties": {
@@ -19,27 +27,60 @@
     },
     "decision": {
       "type": "string",
-      "enum": ["approved", "rejected", "expired", "auto_approved"],
+      "enum": [
+        "approved",
+        "rejected",
+        "expired",
+        "auto_approved"
+      ],
       "description": "Outcome of the approval step. `expired` means the proposal was not decided before expires_at. `auto_approved` means a policy rule (e.g. low-risk + tenant whitelist) approved without human input — log it the same way."
     },
     "decided_by": {
       "type": "object",
       "description": "Who made the decision. For auto_approved, set kind='policy' and identifier to the policy name.",
-      "required": ["kind", "identifier"],
+      "required": [
+        "kind",
+        "identifier"
+      ],
       "additionalProperties": false,
       "properties": {
-        "kind": { "type": "string", "enum": ["human", "policy"] },
-        "identifier": { "type": "string", "minLength": 1, "maxLength": 128 },
-        "display_name": { "type": "string", "maxLength": 128 }
+        "kind": {
+          "type": "string",
+          "enum": [
+            "human",
+            "policy"
+          ]
+        },
+        "identifier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "display_name": {
+          "type": "string",
+          "maxLength": 128
+        }
       }
     },
     "decided_at": {
       "type": "string",
       "format": "date-time"
     },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the gate persisted this record, as distinct from `decided_at`, which is when the approver decided. On asynchronous channels the two diverge: an email or webhook reply can arrive minutes after the click, and a queue replay can arrive much later. Order and reason with `decided_at`; audit with `recorded_at`. Keeping only one of them means you can reconstruct what was true or when you learned it, but not both, and the second is what answers why the dispatcher acted when it did."
+    },
     "channel": {
       "type": "string",
-      "enum": ["telegram", "slack", "email", "web", "n8n_form", "policy"],
+      "enum": [
+        "telegram",
+        "slack",
+        "email",
+        "web",
+        "n8n_form",
+        "policy"
+      ],
       "description": "Where the approval came in. Audit-relevant — different channels have different trust levels."
     },
     "comment": {
@@ -59,6 +100,86 @@
     "signature": {
       "type": "string",
       "description": "Optional. HMAC or signature over the RFC 8785 canonicalization of {proposal_id, decision, decided_by, decided_at, payload_hash}, using a per-tenant key. Required for high-risk actions on untrusted channels. payload_hash is inside the signed object on purpose: signing the decision alone binds who decided, not what they decided on, so the payload can be swapped under an unchanged proposal_id and every signature still verifies."
+    },
+    "rejection_settlement": {
+      "type": "object",
+      "description": "Whether the side effect is actually known not to have happened. A decision of `rejected` or `expired` records what the approver wanted, not what the world looks like: a queue replay, a partial dispatch or a racing retry can land the effect anyway. A rejection nobody verified is an open incident wearing a resolved label, so the settlement is a separate fact with its own timestamp and its own author. Required whenever `decision` is `rejected` or `expired`.",
+      "required": [
+        "state"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "verified_clean",
+            "compensated",
+            "unresolved"
+          ],
+          "description": "`verified_clean`: someone or something checked the target system and the effect is not there. `compensated`: the effect did land and a named compensating action reversed it — the original stays in the log, it is never deleted. `unresolved`: not yet checked. `unresolved` is a legitimate state to write and an illegitimate state to leave, so alert on its age rather than on its existence."
+        },
+        "verified_by": {
+          "type": "object",
+          "description": "Who or what established the state. A probe against the target system is stronger evidence than a person asserting it.",
+          "required": [
+            "kind",
+            "identifier"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "human",
+                "probe",
+                "policy"
+              ]
+            },
+            "identifier": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        },
+        "verified_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "compensating_action_id": {
+          "type": "string",
+          "description": "For `compensated`: the proposal_id of the action that reversed the effect. Compensation is itself a side effect and goes through this same gate.",
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "minLength": 8,
+          "maxLength": 64
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "enum": [
+              "rejected",
+              "expired"
+            ]
+          }
+        },
+        "required": [
+          "decision"
+        ]
+      },
+      "then": {
+        "required": [
+          "rejection_settlement"
+        ]
+      }
+    }
+  ]
 }
