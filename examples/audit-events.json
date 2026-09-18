@@ -1,0 +1,119 @@
+[
+  {
+    "schema_version": "1.0.0",
+    "event_id": "event_2026-04-28_00000001",
+    "stream_id": "stream_prop_b3f1a2c4",
+    "sequence": 1,
+    "previous_event_hash": null,
+    "event_hash": "sha256:8c13fc78697e3c8793e0edf5631b661679dd2b71e19cfe6c920f5fe9fd97feeb",
+    "event_type": "proposal.received",
+    "occurred_at": "2026-04-28T09:14:23Z",
+    "recorded_at": "2026-04-28T09:14:24Z",
+    "tenant": "acme-corp",
+    "proposal_id": "prop_2026-04-28_b3f1a2c4",
+    "actor": {
+      "kind": "system",
+      "identifier": "proposal-ingress",
+      "authentication": {
+        "method": "service_identity",
+        "human_present": false,
+        "assurance": "high",
+        "authenticated_at": "2026-04-28T09:14:24Z"
+      }
+    },
+    "classification": "confidential",
+    "retention": {
+      "class": "standard",
+      "delete_after": "2027-04-28T09:14:24Z",
+      "legal_hold": false
+    },
+    "references": {},
+    "detail": {
+      "action_hash": "sha256:63629bc7b5a40274312d706fb0f8537a284c49bffaacc840760b32543a856770"
+    }
+  },
+  {
+    "schema_version": "1.0.0",
+    "event_id": "event_2026-04-28_00000002",
+    "stream_id": "stream_prop_b3f1a2c4",
+    "sequence": 2,
+    "previous_event_hash": "sha256:8c13fc78697e3c8793e0edf5631b661679dd2b71e19cfe6c920f5fe9fd97feeb",
+    "event_hash": "sha256:b18dc2ab96ff04789c88adcac48995548850c3c62c46aca638cbcb28253ed876",
+    "event_type": "approval.decided",
+    "occurred_at": "2026-04-28T09:14:30Z",
+    "recorded_at": "2026-04-28T09:14:31Z",
+    "tenant": "acme-corp",
+    "proposal_id": "prop_2026-04-28_b3f1a2c4",
+    "actor": {
+      "kind": "human",
+      "identifier": "rene@acme-corp.example",
+      "roles": [
+        "customer-support"
+      ],
+      "authentication": {
+        "method": "signed_callback",
+        "human_present": true,
+        "assurance": "substantial",
+        "authenticated_at": "2026-04-28T09:14:30Z"
+      }
+    },
+    "classification": "confidential",
+    "retention": {
+      "class": "standard",
+      "delete_after": "2027-04-28T09:14:31Z",
+      "legal_hold": false
+    },
+    "references": {
+      "request_id": "req_2026-04-28_6a2d8800",
+      "approval_id": "approval_2026-04-28_f9821000",
+      "policy_evaluation_id": "eval_2026-04-28_1c4f8a00"
+    },
+    "detail": {
+      "decision": "approved",
+      "channel": "email",
+      "action_hash": "sha256:63629bc7b5a40274312d706fb0f8537a284c49bffaacc840760b32543a856770",
+      "payload_hash": "sha256:c919182dcf3aa49d95f5927636aeb7a6a227fa9f9b3daa7384ac4c531a9f891b",
+      "policy_revision": "2026-04-15.3",
+      "wait_ms": 7000
+    }
+  },
+  {
+    "schema_version": "1.0.0",
+    "event_id": "event_2026-04-28_00000003",
+    "stream_id": "stream_prop_b3f1a2c4",
+    "sequence": 3,
+    "previous_event_hash": "sha256:b18dc2ab96ff04789c88adcac48995548850c3c62c46aca638cbcb28253ed876",
+    "event_hash": "sha256:eff570164731e1600f3a32e67c5fb665ba452c20db14a935a91615edf0fb9d95",
+    "event_type": "dispatch.succeeded",
+    "occurred_at": "2026-04-28T09:14:34Z",
+    "recorded_at": "2026-04-28T09:14:34Z",
+    "tenant": "acme-corp",
+    "proposal_id": "prop_2026-04-28_b3f1a2c4",
+    "actor": {
+      "kind": "system",
+      "identifier": "email-dispatcher",
+      "authentication": {
+        "method": "service_identity",
+        "human_present": false,
+        "assurance": "high",
+        "authenticated_at": "2026-04-28T09:14:33Z"
+      }
+    },
+    "classification": "confidential",
+    "retention": {
+      "class": "standard",
+      "delete_after": "2027-04-28T09:14:34Z",
+      "legal_hold": false
+    },
+    "references": {
+      "request_id": "req_2026-04-28_6a2d8800",
+      "approval_id": "approval_2026-04-28_f9821000",
+      "dispatch_id": "dispatch_2026-04-28_4ad31000"
+    },
+    "detail": {
+      "action_hash": "sha256:63629bc7b5a40274312d706fb0f8537a284c49bffaacc840760b32543a856770",
+      "attempt": 1,
+      "provider_result_hash": "sha256:78b0436944885eb78c09ea1a657e2d2c57b0d9672a19f709e6724c22a633a29b"
+    }
+  }
+]

@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v1.0.0/schemas/dispatch-record.schema.json",
+  "title": "DispatchRecord",
+  "description": "An append-only record for one deterministic dispatch attempt or reconciliation result. outcome_unknown is never an invitation to retry blindly.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "dispatch_id",
+    "proposal_id",
+    "request_id",
+    "approval_ids",
+    "action_hash",
+    "idempotency_key",
+    "attempt",
+    "max_attempts",
+    "status",
+    "retry_allowed",
+    "started_at",
+    "recorded_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schema_version"},
+    "dispatch_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "proposal_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "request_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "approval_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {"$ref": "common.schema.json#/$defs/identifier"}
+    },
+    "action_hash": {"$ref": "common.schema.json#/$defs/digest"},
+    "idempotency_key": {"$ref": "common.schema.json#/$defs/identifier"},
+    "attempt": {"type": "integer", "minimum": 1},
+    "max_attempts": {"type": "integer", "minimum": 1, "maximum": 20},
+    "status": {
+      "type": "string",
+      "enum": [
+        "not_dispatched",
+        "succeeded",
+        "failed",
+        "outcome_unknown",
+        "reconciled_succeeded",
+        "reconciled_not_applied"
+      ]
+    },
+    "retry_allowed": {"type": "boolean"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "reason": {
+      "type": "string",
+      "enum": [
+        "approval_missing",
+        "approval_expired",
+        "approval_replayed",
+        "action_hash_mismatch",
+        "payload_hash_mismatch",
+        "policy_mismatch",
+        "provider_rejected",
+        "provider_timeout",
+        "provider_response_lost",
+        "attempt_limit",
+        "dispatcher_error"
+      ]
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider_name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "request_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "result_hash": {"$ref": "common.schema.json#/$defs/digest"},
+        "external_refs": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {"type": "string", "minLength": 1, "maxLength": 512}
+        }
+      }
+    },
+    "reconciliation": {
+      "type": "object",
+      "required": ["lookup_key_hash", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "lookup_key_hash": {"$ref": "common.schema.json#/$defs/digest"},
+        "status": {
+          "type": "string",
+          "enum": ["pending", "succeeded", "not_applied", "unavailable"]
+        },
+        "checked_at": {"type": "string", "format": "date-time"},
+        "evidence": {"$ref": "common.schema.json#/$defs/evidence_reference"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"enum": ["not_dispatched", "failed"]}},
+        "required": ["status"]
+      },
+      "then": {"required": ["completed_at", "reason"]}
+    },
+    {
+      "if": {"properties": {"status": {"const": "succeeded"}}, "required": ["status"]},
+      "then": {
+        "required": ["completed_at", "provider"],
+        "properties": {"retry_allowed": {"const": false}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"status": {"const": "outcome_unknown"}},
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["completed_at", "reason", "reconciliation"],
+        "properties": {
+          "retry_allowed": {"const": false},
+          "reconciliation": {
+            "properties": {"status": {"enum": ["pending", "unavailable"]}}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"enum": ["reconciled_succeeded", "reconciled_not_applied"]}
+        },
+        "required": ["status"]
+      },
+      "then": {"required": ["completed_at", "reconciliation"]}
+    },
+    {
+      "if": {
+        "properties": {"status": {"const": "reconciled_succeeded"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "retry_allowed": {"const": false},
+          "reconciliation": {
+            "properties": {"status": {"const": "succeeded"}},
+            "required": ["checked_at", "evidence"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"status": {"const": "reconciled_not_applied"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "reconciliation": {
+            "properties": {"status": {"const": "not_applied"}},
+            "required": ["checked_at", "evidence"]
+          }
+        }
+      }
+    }
+  ]
+}

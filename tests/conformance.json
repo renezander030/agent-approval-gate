@@ -1,0 +1,216 @@
+{
+  "positive": [
+    {
+      "name": "proposed email action",
+      "schema": "schemas/proposed-action.schema.json",
+      "instance": "examples/email-reply-approval.json"
+    },
+    {
+      "name": "approval policy snapshot",
+      "schema": "schemas/approval-policy.schema.json",
+      "instance": "examples/approval-policy.json"
+    },
+    {
+      "name": "consumed approval request",
+      "schema": "schemas/approval-request.schema.json",
+      "instance": "examples/approval-request.json"
+    },
+    {
+      "name": "approved decision",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/email-reply-approval-record.json"
+    },
+    {
+      "name": "rejected decision with settlement",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/rejected-with-settlement-approval-record.json"
+    },
+    {
+      "name": "successful dispatch",
+      "schema": "schemas/dispatch-record.schema.json",
+      "instance": "examples/dispatch-record.json"
+    },
+    {
+      "name": "audit stream events",
+      "schema": "schemas/audit-event.schema.json",
+      "instance": "examples/audit-events.json",
+      "items": true
+    },
+    {
+      "name": "complete approval envelope",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "semantic": true
+    }
+  ],
+  "negative": [
+    {
+      "name": "email action without subject",
+      "schema": "schemas/proposed-action.schema.json",
+      "instance": "examples/email-reply-approval.json",
+      "expect": "schema",
+      "operations": [
+        {"op": "remove", "path": "/payload/subject"}
+      ]
+    },
+    {
+      "name": "approval without action binding",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/email-reply-approval-record.json",
+      "expect": "schema",
+      "operations": [
+        {"op": "remove", "path": "/action_hash"}
+      ]
+    },
+    {
+      "name": "human cannot claim auto approval",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/email-reply-approval-record.json",
+      "expect": "schema",
+      "operations": [
+        {"op": "replace", "path": "/decision", "value": "auto_approved"},
+        {"op": "replace", "path": "/channel", "value": "policy"},
+        {"op": "add", "path": "/policy_evaluation_id", "value": "eval_2026-04-28_1c4f8a00"}
+      ]
+    },
+    {
+      "name": "compensation needs a reversing action",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/rejected-with-settlement-approval-record.json",
+      "expect": "schema",
+      "operations": [
+        {"op": "replace", "path": "/rejection_settlement/state", "value": "compensated"}
+      ]
+    },
+    {
+      "name": "consumed request needs dispatch identity",
+      "schema": "schemas/approval-request.schema.json",
+      "instance": "examples/approval-request.json",
+      "expect": "schema",
+      "operations": [
+        {"op": "remove", "path": "/dispatch_id"}
+      ]
+    },
+    {
+      "name": "consumed request has a fixed terminal reason",
+      "schema": "schemas/approval-request.schema.json",
+      "instance": "examples/approval-request.json",
+      "expect": "schema",
+      "operations": [
+        {"op": "replace", "path": "/terminal_reason", "value": "approved"}
+      ]
+    },
+    {
+      "name": "successful dispatch cannot be retried",
+      "schema": "schemas/dispatch-record.schema.json",
+      "instance": "examples/dispatch-record.json",
+      "expect": "schema",
+      "operations": [
+        {"op": "replace", "path": "/retry_allowed", "value": true}
+      ]
+    },
+    {
+      "name": "unknown outcome cannot be blindly retried",
+      "schema": "schemas/dispatch-record.schema.json",
+      "instance": "examples/dispatch-record.json",
+      "expect": "schema",
+      "operations": [
+        {"op": "replace", "path": "/status", "value": "outcome_unknown"},
+        {"op": "replace", "path": "/retry_allowed", "value": true},
+        {"op": "add", "path": "/reason", "value": "provider_response_lost"},
+        {
+          "op": "add",
+          "path": "/reconciliation",
+          "value": {
+            "lookup_key_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+            "status": "pending"
+          }
+        }
+      ]
+    },
+    {
+      "name": "high-risk email approval needs a signature",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "schema",
+      "operations": [
+        {"op": "remove", "path": "/approvals/0/signatures"}
+      ]
+    },
+    {
+      "name": "approval action hash must match proposal",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/approvals/0/action_hash",
+          "value": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+        }
+      ]
+    },
+    {
+      "name": "request cannot point at another proposal",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {"op": "replace", "path": "/request/proposal_id", "value": "prop_other_2026_0001"}
+      ]
+    },
+    {
+      "name": "audit chain cannot be spliced",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/audit_events/1/previous_event_hash",
+          "value": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+        }
+      ]
+    },
+    {
+      "name": "quorum must be satisfied",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {"op": "replace", "path": "/request/policy/requirements/minimum_approvals", "value": 2}
+      ]
+    },
+    {
+      "name": "approver must hold required role",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {"op": "remove", "path": "/approvals/0/decided_by/roles"}
+      ]
+    },
+    {
+      "name": "approval cannot predate its request",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/approvals/0/decided_at",
+          "value": "2026-04-28T09:14:20Z"
+        }
+      ]
+    },
+    {
+      "name": "attempt cannot exceed its ceiling",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {"op": "replace", "path": "/dispatches/0/attempt", "value": 4}
+      ]
+    }
+  ]
+}

@@ -1,10 +1,21 @@
 {
+  "schema_version": "1.0.0",
+  "approval_id": "approval_2026-04-28_0e1bb000",
+  "request_id": "req_2026-04-28_91cc7000",
   "proposal_id": "prop_2026-04-28_9d7e0f13",
+  "action_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "payload_hash": "sha256:4d2f6b7c1e08a35d9f0c2b84e7a15d63c8e94f207b1a6d3e5c0f8927ab4361de",
   "decision": "rejected",
   "decided_by": {
     "kind": "human",
     "identifier": "rene@acme-corp.example",
-    "display_name": "Rene Z."
+    "display_name": "Rene Z.",
+    "authentication": {
+      "method": "channel_identity",
+      "human_present": true,
+      "assurance": "low",
+      "authenticated_at": "2026-04-28T09:16:05Z"
+    }
   },
   "decided_at": "2026-04-28T09:16:05Z",
   "recorded_at": "2026-04-28T09:21:44Z",
@@ -14,10 +25,21 @@
     "state": "verified_clean",
     "verified_by": {
       "kind": "probe",
-      "identifier": "crm-writeback-probe"
+      "identifier": "crm-writeback-probe",
+      "authentication": {
+        "method": "service_identity",
+        "human_present": false,
+        "assurance": "high",
+        "authenticated_at": "2026-04-28T09:22:10Z"
+      }
     },
     "verified_at": "2026-04-28T09:22:10Z",
-    "note": "Polled the CRM record after the decision landed. No write present, so the reply that raced the rejection did not dispatch."
-  },
-  "payload_hash": "sha256:4d2f6b7c1e08a35d9f0c2b84e7a15d63c8e94f207b1a6d3e5c0f8927ab4361de"
+    "evidence": {
+      "kind": "reconciliation",
+      "uri": "urn:acme:crm-probe:2026-04-28:7721",
+      "digest": "sha256:5ea04bd22c18de8104ed2cd23148c7b62123d63b0c549a62d53be189f16c3a65",
+      "label": "CRM target record absent after rejection"
+    },
+    "note": "Polled the CRM record after the decision landed. No write was present."
+  }
 }

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v1.0.0/schemas/actions/email.send.schema.json",
+  "title": "email.send payload",
+  "description": "Reference payload contract for an email dispatcher. Copy and adapt this pattern next to each real dispatcher.",
+  "type": "object",
+  "required": ["from", "to", "subject", "body_text"],
+  "additionalProperties": false,
+  "properties": {
+    "from": {"type": "string", "format": "email", "maxLength": 320},
+    "to": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "uniqueItems": true,
+      "items": {"type": "string", "format": "email", "maxLength": 320}
+    },
+    "cc": {
+      "type": "array",
+      "maxItems": 50,
+      "uniqueItems": true,
+      "items": {"type": "string", "format": "email", "maxLength": 320}
+    },
+    "subject": {"type": "string", "minLength": 1, "maxLength": 998},
+    "body_text": {"type": "string", "minLength": 1, "maxLength": 200000},
+    "in_reply_to_message_id": {"type": "string", "maxLength": 998},
+    "ticket_id": {"type": "string", "maxLength": 128}
+  }
+}

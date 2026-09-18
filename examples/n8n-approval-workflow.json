@@ -1,62 +1,351 @@
 {
-  "name": "agent-approval-gate (reference)",
+  "name": "agent-approval-gate v1 reference",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "agent-proposal",
+        "path": "agent-proposal-v1",
+        "responseMode": "onReceived",
         "options": {}
       },
+      "id": "10c0c7f4-d2c2-4ebd-9ed8-4c70226f88b1",
       "name": "Webhook: ProposedAction in",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
-      "position": [240, 300],
-      "webhookId": "agent-proposal"
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "agent-proposal-v1"
     },
     {
       "parameters": {
-        "functionCode": "const a = $json.body || $json;\nconst required = ['proposal_id','agent','action_type','payload','created_at','tenant'];\nfor (const k of required) {\n  if (!(k in a)) throw new Error('ProposedAction missing field: ' + k);\n}\nconst allowed = ['email.send','crm.update_record','ticket.create','db.update_row','api.call','n8n.trigger_workflow'];\nif (!allowed.includes(a.action_type)) throw new Error('Unknown action_type: ' + a.action_type);\nif (a.expires_at && new Date(a.expires_at) < new Date()) throw new Error('Proposal already expired');\nreturn [{json: a}];"
+        "method": "POST",
+        "url": "={{$env.APPROVAL_VALIDATOR_URL + '/v1/validate'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ schema: 'proposed-action.schema.json', instance: $json.body || $json }) }}",
+        "options": {
+          "timeout": 10000
+        }
       },
-      "name": "Validate against schema",
-      "type": "n8n-nodes-base.function",
-      "typeVersion": 1,
-      "position": [460, 300]
+      "id": "5fa9a18b-885c-4818-af5a-82166cba38ac",
+      "name": "Validate full JSON Schema",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 300],
+      "notes": "The validator returns {valid, instance, errors}. It must enforce Draft 2020-12 plus format checks."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e7a1cf46-39fa-4a79-a9fb-77fc199d67da",
+              "leftValue": "={{$json.valid}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "06f269d9-c4dd-4603-be41-7d41fca40589",
+      "name": "Contract valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v1/requests'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ proposal: $json.instance, policy_id: $env.APPROVAL_POLICY_ID, resume_url: $execution.resumeUrl + '/decision' }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "45825fe0-60dc-4e80-8165-5a28657495da",
+      "name": "Create durable approval request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 180],
+      "notes": "This endpoint persists the request before notification and returns request_id, action_hash, review_url, and a redacted preview."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v1/events'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ event_type: 'approval.requested', request_id: $json.request_id, proposal_id: $json.proposal_id, action_hash: $json.action_hash, occurred_at: $now.toUTC().toISO() }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "522032f5-443d-4ad9-801d-65b50357bdb8",
+      "name": "Append requested audit event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 180]
     },
     {
       "parameters": {
         "chatId": "={{$env.TG_APPROVER_CHAT_ID}}",
-        "text": "=*Proposed action:* `{{$json.action_type}}`\n*Tenant:* `{{$json.tenant}}`\n*Agent:* `{{$json.agent.name}}` v{{$json.agent.version}}\n*Risk:* {{$json.risk || 'unspecified'}}\n*Expires:* {{$json.expires_at || 'never'}}\n\n*Rationale:*\n{{$json.rationale}}\n\n*Payload:*\n```\n{{JSON.stringify($json.payload, null, 2)}}\n```\n\nReply `approve {{$json.proposal_id}}` or `reject {{$json.proposal_id}}` to decide.",
+        "text": "=*Approval required*\nRequest: `{{$('Create durable approval request').item.json.request_id}}`\nAction hash: `{{$('Create durable approval request').item.json.action_hash}}`\nExpires: {{$('Create durable approval request').item.json.expires_at}}\n\n{{$('Create durable approval request').item.json.preview}}\n\nReview and decide: {{$('Create durable approval request').item.json.review_url}}",
         "additionalFields": {
           "parse_mode": "Markdown"
         }
       },
-      "name": "Send to approver (Telegram)",
+      "id": "c99e353e-0f2c-4bb4-aad1-35c93fe7b906",
+      "name": "Send signed review link",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [680, 300]
+      "position": [1200, 180],
+      "notes": "Assign Telegram credentials after import. The link targets the approval service, which verifies identity and posts a signed callback to the resume URL."
     },
     {
       "parameters": {
-        "functionCode": "const proposal = $json;\nconst record = {\n  event: 'proposed',\n  proposal_id: proposal.proposal_id,\n  tenant: proposal.tenant,\n  action_type: proposal.action_type,\n  agent: proposal.agent,\n  payload: proposal.payload,\n  rationale: proposal.rationale,\n  created_at: proposal.created_at,\n  logged_at: new Date().toISOString()\n};\nreturn [{json: record}];"
+        "resume": "webhook",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "responseCode": 202,
+        "responseData": "={\"accepted\":true}",
+        "limitWaitTime": true,
+        "limitType": "atSpecifiedTime",
+        "maxDateAndTime": "={{$('Create durable approval request').item.json.expires_at}}",
+        "options": {
+          "webhookSuffix": "decision"
+        }
       },
-      "name": "Append to audit log",
-      "type": "n8n-nodes-base.function",
-      "typeVersion": 1,
-      "position": [900, 300]
+      "id": "c393c355-a729-4c42-af31-cfcdf0e66974",
+      "name": "Wait for signed callback",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1440, 180],
+      "webhookId": "agent-approval-resume-v1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v1/requests/' + $('Create durable approval request').item.json.request_id + '/resolve'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ callback: $json.body || $json, received_at: $now.toUTC().toISO() }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "d77d62ed-4a7f-4d7f-8aa8-dc3d15c015df",
+      "name": "Resolve callback atomically",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1680, 180],
+      "notes": "The approval service rejects stale, duplicate, cross-tenant, bad-signature, wrong-action, and already-consumed callbacks."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "25350d41-e139-4473-b97d-c5e5c18d76fc",
+              "leftValue": "={{$json.status}}",
+              "rightValue": "approved",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "acac5d5d-145f-47ec-b56a-a8651a6f4dd5",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1920, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v1/requests/' + $('Create durable approval request').item.json.request_id + '/consume'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ approval_id: $json.approval.approval_id, expected_revision: $json.request_revision }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "0d68c4f6-2aee-46ea-910a-9efff16db54c",
+      "name": "Consume approval once",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2160, 60]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_DISPATCH_URL}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Idempotency-Key",
+              "value": "={{$json.proposal.idempotency_key}}"
+            },
+            {
+              "name": "X-Approval-Grant",
+              "value": "={{$json.single_use_grant}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ proposal: $json.proposal, approval: $json.approval, action_hash: $json.action_hash }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "713627a3-1109-45ec-ae79-9c26c25c238b",
+      "name": "Dispatch exactly once",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2400, 60]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v1/events'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ event_type: 'dispatch.succeeded', request_id: $('Create durable approval request').item.json.request_id, dispatch_result: $json, recorded_at: $now.toUTC().toISO() }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "32b5c6a5-cf5d-453d-8f64-0321d6ad72d8",
+      "name": "Append dispatch audit event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2640, 60]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v1/events'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ event_type: 'dispatch.not_dispatched', request_id: $('Create durable approval request').item.json.request_id, terminal_status: $json.status || 'expired', reason: $json.reason || 'no_approval', recorded_at: $now.toUTC().toISO() }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "2c49b185-87b2-43ae-bd9c-3be03c52e872",
+      "name": "Append terminal refusal event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2160, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v1/events'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ event_type: 'validation.rejected', errors: $json.errors, recorded_at: $now.toUTC().toISO() }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "3e54e5bc-2dd2-4de5-8679-60fe2999f3c6",
+      "name": "Append validation rejection",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 420]
     }
   ],
   "connections": {
     "Webhook: ProposedAction in": {
-      "main": [[{ "node": "Validate against schema", "type": "main", "index": 0 }]]
+      "main": [[{"node": "Validate full JSON Schema", "type": "main", "index": 0}]]
     },
-    "Validate against schema": {
-      "main": [[{ "node": "Send to approver (Telegram)", "type": "main", "index": 0 }]]
+    "Validate full JSON Schema": {
+      "main": [[{"node": "Contract valid?", "type": "main", "index": 0}]]
     },
-    "Send to approver (Telegram)": {
-      "main": [[{ "node": "Append to audit log", "type": "main", "index": 0 }]]
+    "Contract valid?": {
+      "main": [
+        [{"node": "Create durable approval request", "type": "main", "index": 0}],
+        [{"node": "Append validation rejection", "type": "main", "index": 0}]
+      ]
+    },
+    "Create durable approval request": {
+      "main": [[{"node": "Append requested audit event", "type": "main", "index": 0}]]
+    },
+    "Append requested audit event": {
+      "main": [[{"node": "Send signed review link", "type": "main", "index": 0}]]
+    },
+    "Send signed review link": {
+      "main": [[{"node": "Wait for signed callback", "type": "main", "index": 0}]]
+    },
+    "Wait for signed callback": {
+      "main": [[{"node": "Resolve callback atomically", "type": "main", "index": 0}]]
+    },
+    "Resolve callback atomically": {
+      "main": [[{"node": "Approved?", "type": "main", "index": 0}]]
+    },
+    "Approved?": {
+      "main": [
+        [{"node": "Consume approval once", "type": "main", "index": 0}],
+        [{"node": "Append terminal refusal event", "type": "main", "index": 0}]
+      ]
+    },
+    "Consume approval once": {
+      "main": [[{"node": "Dispatch exactly once", "type": "main", "index": 0}]]
+    },
+    "Dispatch exactly once": {
+      "main": [[{"node": "Append dispatch audit event", "type": "main", "index": 0}]]
     }
   },
   "active": false,
-  "settings": {},
-  "tags": ["agent-approval-gate", "ai-automation"]
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e82f70b7-139c-4426-8139-5e36562bd44f",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "agent-approval-gate"
+    },
+    {
+      "name": "reference"
+    }
+  ]
 }
