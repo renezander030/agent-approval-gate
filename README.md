@@ -2,112 +2,128 @@
 
 **AI agents should draft. Code should validate. Humans should approve. Systems should dispatch.**
 
-A minimal production pattern for adding approval gates to AI automation workflows. Use it when an agent wants to:
+A portable contract pattern for adding approval gates to AI automation workflows.
+Use it when an agent wants to send a message, update a record, create a ticket, call
+an API, or trigger another workflow.
 
-- send an email
-- update a CRM record
-- create a ticket
-- modify a database row
-- call an internal API
-- trigger an n8n workflow
-
-This repo is opinion + schemas + examples. It is not a framework. Drop the schemas into your own stack.
+This repo is opinion + versioned JSON Schemas + conformance examples. It is not a
+framework. Drop the contracts into your own stack and keep the side-effect credential
+away from the agent.
 
 ## The pattern
 
-```
-   ┌──────────────┐
-   │   AI Agent   │   drafts a ProposedAction
-   └──────┬───────┘
-          │
-          ▼
-   ┌──────────────┐
-   │   Schema     │   reject malformed drafts at the boundary
-   │  Validation  │
-   └──────┬───────┘
-          │
-          ▼
-   ┌──────────────┐
-   │   Approval   │   human (Telegram, Slack, email, web)
-   │    Queue     │
-   └──────┬───────┘
-          │  ApprovalRecord
-          ▼
-   ┌──────────────┐
-   │ Deterministic│   plain code dispatches the side effect
-   │  Dispatcher  │
-   └──────┬───────┘
-          │
-          ▼
-   ┌──────────────┐
-   │  Audit Log   │   what was proposed, by whom, approved by whom, dispatched when
-   └──────────────┘
+```text
+AI Agent -> ProposedAction -> ApprovalRequest -> ApprovalRecord
+                                              |
+                                              v
+                                      deterministic Dispatcher
+                                              |
+                                              v
+                          DispatchRecord + hash-chained audit events
 ```
 
-Five contracts:
+Five boundaries make the gate real:
 
-1. **ProposedAction** — what the agent wants to do, fully serialized, no executable code.
-2. **Schema validation** — every action type has a JSON Schema. Reject at the boundary.
-3. **ApprovalRecord** — who approved, when, on what channel, and a hash of the exact payload they approved. Signed if the channel supports it.
-4. **Dispatcher** — plain code (not the agent) executes the action. The agent never calls the side-effect API directly.
-5. **Audit log** — append-only record linking proposal → approval → dispatch outcome.
+1. **ProposedAction** serializes the complete action. Its RFC 8785 digest binds the
+   action type, call identity, arguments, tenant, expiry, risk, and idempotency key.
+2. **ApprovalRequest** is durable, addressable state. A callback resolves one known,
+   pending request and the approved request is consumed exactly once.
+3. **ApprovalRecord** names the actor and immutable policy revision and binds the
+   decision to the effective action and payload.
+4. **Dispatcher** is plain code. It presents the stable idempotency key to the provider
+   and records success, failure, or an explicitly unknown outcome before any retry.
+5. **Audit stream** is append-only, redacted, and hash-linked from proposal through
+   decision to the terminal dispatch result.
 
-If you skip any of the five, you don't have an approval gate — you have a model that can ship to production.
+If the agent still has the side-effect credential, the approval path remains optional
+from the agent's point of view.
 
-## Why this is different from "human-in-the-loop"
+## Contracts in v1.0.0
 
-"Human-in-the-loop" usually means *the human reads what the model said and clicks OK*. That's not enough. Three failures show up the moment AI touches real customers:
+| Contract | Purpose |
+|---|---|
+| [`proposed-action.schema.json`](schemas/proposed-action.schema.json) | Exact action draft, expiry, risk, payload schema, and idempotency identity |
+| [`approval-policy.schema.json`](schemas/approval-policy.schema.json) | Immutable policy revision, material inputs, quorum, and channel requirements |
+| [`approval-request.schema.json`](schemas/approval-request.schema.json) | Durable pending identity, notifications, terminal state, and single-use consumption |
+| [`approval-record.schema.json`](schemas/approval-record.schema.json) | Human or policy decision, action and payload hashes, signatures, and settlement evidence |
+| [`dispatch-record.schema.json`](schemas/dispatch-record.schema.json) | Attempt ceiling, provider outcome, unknown-outcome handling, and reconciliation |
+| [`audit-event.schema.json`](schemas/audit-event.schema.json) | Redacted lifecycle evidence with actor, event time, ingestion time, and hash chain |
+| [`approval-envelope.schema.json`](schemas/approval-envelope.schema.json) | Portable bundle plus cross-contract profile for a completed lifecycle |
+| [`actions/email.send.schema.json`](schemas/actions/email.send.schema.json) | Strict reference for composing action-specific payload contracts |
 
-- **Schema drift** — the agent emits a slightly different shape next week and your dispatcher silently does the wrong thing.
-- **Dispatch coupling** — the agent itself calls the API, so an approval *step* exists but the model can also bypass it on the next run.
-- **No audit** — you cannot answer "why did this email go out" three weeks later.
-
-The five contracts above close all three.
-
-## What's in this repo
-
-```
-agent-approval-gate/
-├── README.md                                 — this file
-├── schemas/
-│   ├── proposed-action.schema.json           — the agent's draft
-│   └── approval-record.schema.json           — the approval decision
-├── examples/
-│   ├── email-reply-approval.json             — example proposed action
-│   ├── email-reply-approval-record.json      — the matching approval record, payload_hash included
-│   ├── rejected-with-settlement-approval-record.json — a rejection plus proof the effect never landed
-│   └── n8n-approval-workflow.json            — importable n8n workflow
-├── docs/
-│   └── architecture.md                       — long-form rationale
-└── LICENSE                                   — MIT
-```
+Schema IDs are pinned to the `v1.0.0` release. Pin a released ID in production; do not
+resolve schemas from the mutable default branch.
 
 ## Quick start
 
-1. Read `docs/architecture.md` for the full pattern.
-2. Adopt `schemas/proposed-action.schema.json` as the contract between your agent and your dispatcher. Reject drafts that don't validate.
-3. Wire one approval channel (Telegram bot, Slack DM, n8n form, internal web UI). The example `examples/n8n-approval-workflow.json` shows the simplest version.
-4. Append a log entry per proposal, per approval, per dispatch. Three rows minimum, not one.
-5. Record a `payload_hash` on every `ApprovalRecord`, and have the dispatcher recompute it before it fires. `proposal_id` alone binds the approval to a row, not to the bytes that row held at approval time. `examples/email-reply-approval-record.json` shows the shape.
+1. Validate the incoming proposal against `proposed-action.schema.json` and its
+   action-specific payload schema.
+2. Canonicalize the complete `ProposedAction` with RFC 8785 and store its SHA-256 as
+   `action_hash` on the approval request.
+3. Persist the request before notifying any channel. Resolve callbacks only by the
+   pending `request_id`, expected revision, tenant, nonce, and action hash.
+4. Recompute the effective action after any JSON Patch modifications. Write one
+   append-only `ApprovalRecord` per approver.
+5. Atomically consume the approved request, then dispatch with the proposal's stable
+   `idempotency_key`. An unknown provider outcome goes to reconciliation, not retry.
+6. Append the lifecycle events. Never put raw payloads, credentials, callback tokens,
+   or provider secrets in the audit stream.
 
-## What this repo is NOT
+The complete synthetic lifecycle is in
+[`examples/approval-envelope.json`](examples/approval-envelope.json). The validator
+checks IDs, hashes, quorum, expiry, sequence linkage, and attempt ceilings that JSON
+Schema alone cannot compare across documents.
 
-- Not a framework. No SDK, no CLI, no daemon.
-- Not coupled to one LLM, one orchestrator, or one approval channel.
-- Not a turnkey solution for high-frequency dispatch. If your agent ships 10k actions/hour, this pattern is the *floor*, not the ceiling — bolt on rate limits, batching, and write-side tenancy.
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python scripts/generate_examples.py
+.venv/bin/python -m unittest discover -s tests -v
+```
+
+## n8n reference
+
+[`examples/n8n-approval-workflow.json`](examples/n8n-approval-workflow.json) is an
+importable wait-and-resume reference. Unlike a notification-only workflow, it calls a
+real schema validator, persists the request before notification, accepts a signed
+callback, atomically consumes the approval, sends an idempotency key to the dispatcher,
+and records both success and refusal paths.
+
+Configure these deployment-owned endpoints after import:
+
+- `APPROVAL_VALIDATOR_URL` — validates the versioned schemas.
+- `APPROVAL_GATE_URL` — stores requests and resolves/consumes callbacks atomically.
+- `APPROVAL_AUDIT_URL` — appends and hash-links audit events.
+- `APPROVAL_DISPATCH_URL` — deterministic side-effect endpoint.
+- `APPROVAL_POLICY_ID` and `TG_APPROVER_CHAT_ID` — policy and approver routing.
+
+The workflow deliberately does not embed a queue, database, validator, or dispatcher.
+Those are trust-boundary components, not Code-node snippets. See
+[`docs/n8n-reference.md`](docs/n8n-reference.md).
+
+## What this repo is not
+
+- Not a framework, SDK, CLI, daemon, hosted queue, or dispatcher.
+- Not coupled to one LLM, orchestrator, approval channel, or protocol.
+- Not a prompt-injection filter, rate limiter, budget engine, or ACL synchronization
+  service.
+- Not third-party-verifiable proof when the platform itself holds the signing key.
+
+See [`docs/architecture.md`](docs/architecture.md) for the threat model and
+[`docs/contracts.md`](docs/contracts.md) for canonicalization, lifecycle, and
+compatibility rules.
 
 ## Related gates
 
-- [skillgate](https://github.com/renezander030/skillgate) — the deterministic-gate idea applied to the **dev finish line**: it blocks `git commit` / `push` / `publish` (in opencode, Claude Code, pre-commit, CI) until your definition-of-done passes. This repo gates real-world *actions* behind human approval and an audit log; skillgate gates *"is the work actually done?"* with a script. Different boundary, same principle: a check the agent cannot route around.
+- [skillgate](https://github.com/renezander030/skillgate) applies the deterministic-gate
+  idea to the development finish line.
 
 ## Related work
 
-- [Production AI Automation Notes #1: Agent Approval Gates](https://gist.github.com/renezander030/9069db775e494ffd2cdd5a09adf83add) — the long-form essay companion to this repo. Walks the five contracts in detail with code samples.
-- [Claude Code with local LLMs](https://gist.github.com/renezander030/39249215616a095d74fe6c66b0348641) — `ANTHROPIC_BASE_URL` setup with Ollama / LM Studio / vLLM, current model picks, tool-call failure modes. Where you'd most often deploy this approval gate.
-- [CLAUDE.md — 10 rules for Claude Code, edit-time and runtime](https://gist.github.com/renezander030/2898eb5f0100688f4197b5e493e156a2) — the runtime rules (#7 HITL, #8 schema validation) are the same discipline applied inside Claude Code.
-- [Context7 v2 — enterprise GraphQL MCP pattern](https://gist.github.com/renezander030/83ad49aeffa5f8749325a2b19617823f) — what changes when an MCP server can write, not just read. Approval envelopes show up there too.
-- [fixclaw](https://github.com/renezander030/fixclaw) — Go pipeline engine that enforces the runtime rules in production.
+- [Production AI Automation Notes #1: Agent Approval Gates](https://gist.github.com/renezander030/9069db775e494ffd2cdd5a09adf83add)
+- [Claude Code with local LLMs](https://gist.github.com/renezander030/39249215616a095d74fe6c66b0348641)
+- [Claude Code runtime rules](https://gist.github.com/renezander030/2898eb5f0100688f4197b5e493e156a2)
+- [Context7 v2 enterprise GraphQL MCP pattern](https://gist.github.com/renezander030/83ad49aeffa5f8749325a2b19617823f)
+- [fixclaw](https://github.com/renezander030/fixclaw)
 
----
-
-_This is part of **Production AI Automation Notes** — a series of repos and gists on shipping AI agents that touch real systems safely. Follow [@renezander030](https://github.com/renezander030) for the next entry._
+MIT licensed. Maintained by [René Zander](https://github.com/renezander030).

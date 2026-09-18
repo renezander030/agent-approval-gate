@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v1.0.0/schemas/common.schema.json",
+  "title": "Agent Approval Gate common definitions",
+  "$defs": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{7,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "actor": {
+      "type": "object",
+      "required": ["kind", "identifier", "authentication"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["human", "policy", "system", "probe"]
+        },
+        "identifier": {"type": "string", "minLength": 1, "maxLength": 128},
+        "display_name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "roles": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 64}
+        },
+        "authentication": {
+          "type": "object",
+          "required": ["method", "human_present", "assurance"],
+          "additionalProperties": false,
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": [
+                "authenticated_session",
+                "signed_callback",
+                "channel_identity",
+                "policy_engine",
+                "service_identity",
+                "unknown"
+              ]
+            },
+            "human_present": {"type": "boolean"},
+            "assurance": {
+              "type": "string",
+              "enum": ["low", "substantial", "high"]
+            },
+            "authenticated_at": {"type": "string", "format": "date-time"},
+            "evidence_ref": {"type": "string", "minLength": 1, "maxLength": 512}
+          }
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "required": ["algorithm", "key_id", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {"type": "string", "enum": ["hmac-sha256", "ed25519"]},
+        "key_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "value": {"type": "string", "pattern": "^[A-Za-z0-9_-]{32,}$"}
+      }
+    },
+    "action_patch_operation": {
+      "type": "object",
+      "required": ["op", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "op": {"type": "string", "enum": ["add", "remove", "replace", "test"]},
+        "path": {"type": "string", "pattern": "^/payload(?:/.*)?$"},
+        "value": true
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"op": {"enum": ["add", "replace", "test"]}},
+            "required": ["op"]
+          },
+          "then": {"required": ["value"]}
+        },
+        {
+          "if": {"properties": {"op": {"const": "remove"}}, "required": ["op"]},
+          "then": {"not": {"required": ["value"]}}
+        }
+      ]
+    },
+    "evidence_reference": {
+      "type": "object",
+      "required": ["kind", "uri", "digest"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["document", "preview", "policy", "provider_record", "reconciliation"]
+        },
+        "uri": {"type": "string", "format": "uri", "maxLength": 2048},
+        "digest": {"$ref": "#/$defs/digest"},
+        "label": {"type": "string", "maxLength": 128}
+      }
+    }
+  }
+}

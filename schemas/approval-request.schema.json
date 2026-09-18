@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v1.0.0/schemas/approval-request.schema.json",
+  "title": "ApprovalRequest",
+  "description": "Durable state for one pending approval. Resolve it by request_id with compare-and-set semantics; never infer authority from payload shape or conversation text.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "request_id",
+    "proposal_id",
+    "call_id",
+    "tenant",
+    "action_hash",
+    "callback_nonce_hash",
+    "requested_at",
+    "expires_at",
+    "status",
+    "revision",
+    "requested_by",
+    "policy",
+    "channels"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schema_version"},
+    "request_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "proposal_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "call_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "parent_call_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "tenant": {"type": "string", "minLength": 1, "maxLength": 64},
+    "action_hash": {"$ref": "common.schema.json#/$defs/digest"},
+    "callback_nonce_hash": {"$ref": "common.schema.json#/$defs/digest"},
+    "requested_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "status": {
+      "type": "string",
+      "enum": ["pending", "approved", "rejected", "expired", "cancelled", "failed", "consumed"]
+    },
+    "revision": {"type": "integer", "minimum": 1},
+    "requested_by": {"$ref": "common.schema.json#/$defs/actor"},
+    "policy": {"$ref": "approval-policy.schema.json"},
+    "channels": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "required": ["channel", "target_hash", "delivery_status"],
+        "additionalProperties": false,
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": ["telegram", "slack", "email", "web", "n8n_form", "policy"]
+          },
+          "target_hash": {"$ref": "common.schema.json#/$defs/digest"},
+          "delivery_status": {
+            "type": "string",
+            "enum": ["pending", "sent", "delivered", "failed"]
+          },
+          "notification_id": {"type": "string", "maxLength": 256},
+          "sent_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "review_evidence": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {"$ref": "common.schema.json#/$defs/evidence_reference"}
+    },
+    "terminal_at": {"type": "string", "format": "date-time"},
+    "decision_record_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "consumed_at": {"type": "string", "format": "date-time"},
+    "dispatch_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "terminal_reason": {
+      "type": "string",
+      "enum": [
+        "approved",
+        "rejected",
+        "deadline_elapsed",
+        "cancelled_by_requester",
+        "callback_invalid",
+        "policy_failed",
+        "delivery_failed",
+        "consumed_for_dispatch"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "pending"}}, "required": ["status"]},
+      "then": {
+        "not": {
+          "anyOf": [
+            {"required": ["terminal_at"]},
+            {"required": ["terminal_reason"]},
+            {"required": ["decision_record_id"]},
+            {"required": ["consumed_at"]},
+            {"required": ["dispatch_id"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "approved"}}, "required": ["status"]},
+      "then": {
+        "required": ["terminal_at", "terminal_reason", "decision_record_id"],
+        "properties": {"terminal_reason": {"const": "approved"}},
+        "not": {
+          "anyOf": [
+            {"required": ["consumed_at"]},
+            {"required": ["dispatch_id"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "rejected"}}, "required": ["status"]},
+      "then": {
+        "required": ["terminal_at", "terminal_reason", "decision_record_id"],
+        "properties": {"terminal_reason": {"const": "rejected"}},
+        "not": {
+          "anyOf": [
+            {"required": ["consumed_at"]},
+            {"required": ["dispatch_id"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"status": {"const": "expired"}},
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["terminal_at", "terminal_reason"],
+        "properties": {"terminal_reason": {"const": "deadline_elapsed"}},
+        "not": {
+          "anyOf": [
+            {"required": ["decision_record_id"]},
+            {"required": ["consumed_at"]},
+            {"required": ["dispatch_id"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "cancelled"}}, "required": ["status"]},
+      "then": {
+        "required": ["terminal_at", "terminal_reason"],
+        "properties": {"terminal_reason": {"const": "cancelled_by_requester"}},
+        "not": {
+          "anyOf": [
+            {"required": ["decision_record_id"]},
+            {"required": ["consumed_at"]},
+            {"required": ["dispatch_id"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "failed"}}, "required": ["status"]},
+      "then": {
+        "required": ["terminal_at", "terminal_reason"],
+        "properties": {
+          "terminal_reason": {
+            "enum": ["callback_invalid", "policy_failed", "delivery_failed"]
+          }
+        },
+        "not": {
+          "anyOf": [
+            {"required": ["decision_record_id"]},
+            {"required": ["consumed_at"]},
+            {"required": ["dispatch_id"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "consumed"}}, "required": ["status"]},
+      "then": {
+        "required": [
+          "terminal_at",
+          "terminal_reason",
+          "decision_record_id",
+          "consumed_at",
+          "dispatch_id"
+        ],
+        "properties": {"terminal_reason": {"const": "consumed_for_dispatch"}}
+      }
+    }
+  ]
+}

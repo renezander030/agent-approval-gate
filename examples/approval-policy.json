@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0.0",
+  "policy_id": "policy.high-risk-email.v1",
+  "revision": "2026-04-15.3",
+  "policy_digest": "sha256:a4f5ac837738a43e70baa0f2d602bbba2f2285a518beb568746f310f0678dc35",
+  "evaluation_id": "eval_2026-04-28_1c4f8a00",
+  "material_input_hash": "sha256:63629bc7b5a40274312d706fb0f8537a284c49bffaacc840760b32543a856770",
+  "evaluated_at": "2026-04-28T09:14:24Z",
+  "requirements": {
+    "minimum_approvals": 1,
+    "distinct_approvers": true,
+    "human_only": true,
+    "allowed_channels": [
+      "email",
+      "web"
+    ],
+    "signature_required_channels": [
+      "email"
+    ],
+    "allow_auto_approval": false,
+    "required_roles": [
+      "customer-support"
+    ]
+  }
+}

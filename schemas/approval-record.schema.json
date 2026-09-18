@@ -1,185 +1,212 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/renezander030/agent-approval-gate/schemas/approval-record.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v1.0.0/schemas/approval-record.schema.json",
   "title": "ApprovalRecord",
-  "description": "The decision a human (or policy) made on a ProposedAction. Append-only — never mutated after write. A rejection additionally carries whether the side effect is known not to have landed.",
+  "description": "An append-only terminal decision bound to the exact effective action and payload reviewed by the approver.",
   "type": "object",
   "required": [
+    "schema_version",
+    "approval_id",
+    "request_id",
     "proposal_id",
+    "action_hash",
+    "payload_hash",
     "decision",
     "decided_by",
     "decided_at",
+    "recorded_at",
     "channel"
   ],
-  "dependentRequired": {
-    "signature": [
-      "payload_hash"
-    ]
-  },
   "additionalProperties": false,
   "properties": {
-    "proposal_id": {
-      "type": "string",
-      "description": "Foreign key to ProposedAction.proposal_id.",
-      "pattern": "^[a-zA-Z0-9_-]+$",
-      "minLength": 8,
-      "maxLength": 64
-    },
+    "schema_version": {"$ref": "common.schema.json#/$defs/schema_version"},
+    "approval_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "request_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "proposal_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "action_hash": {"$ref": "common.schema.json#/$defs/digest"},
+    "payload_hash": {"$ref": "common.schema.json#/$defs/digest"},
     "decision": {
       "type": "string",
-      "enum": [
-        "approved",
-        "rejected",
-        "expired",
-        "auto_approved"
-      ],
-      "description": "Outcome of the approval step. `expired` means the proposal was not decided before expires_at. `auto_approved` means a policy rule (e.g. low-risk + tenant whitelist) approved without human input — log it the same way."
+      "enum": ["approved", "rejected", "expired", "cancelled", "auto_approved", "failed"]
     },
-    "decided_by": {
-      "type": "object",
-      "description": "Who made the decision. For auto_approved, set kind='policy' and identifier to the policy name.",
-      "required": [
-        "kind",
-        "identifier"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "kind": {
-          "type": "string",
-          "enum": [
-            "human",
-            "policy"
-          ]
-        },
-        "identifier": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
-        },
-        "display_name": {
-          "type": "string",
-          "maxLength": 128
-        }
-      }
-    },
-    "decided_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "recorded_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "When the gate persisted this record, as distinct from `decided_at`, which is when the approver decided. On asynchronous channels the two diverge: an email or webhook reply can arrive minutes after the click, and a queue replay can arrive much later. Order and reason with `decided_at`; audit with `recorded_at`. Keeping only one of them means you can reconstruct what was true or when you learned it, but not both, and the second is what answers why the dispatcher acted when it did."
-    },
+    "decided_by": {"$ref": "common.schema.json#/$defs/actor"},
+    "decided_at": {"type": "string", "format": "date-time"},
+    "recorded_at": {"type": "string", "format": "date-time"},
     "channel": {
       "type": "string",
-      "enum": [
-        "telegram",
-        "slack",
-        "email",
-        "web",
-        "n8n_form",
-        "policy"
-      ],
-      "description": "Where the approval came in. Audit-relevant — different channels have different trust levels."
+      "enum": ["telegram", "slack", "email", "web", "n8n_form", "policy"]
     },
-    "comment": {
-      "type": "string",
-      "maxLength": 2000,
-      "description": "Optional free-text from the approver. Surfaced in the audit log."
-    },
+    "comment": {"type": "string", "maxLength": 2000},
     "modifications": {
-      "type": "object",
-      "description": "Optional. If the approver edited the payload before approving, record the diff here. Dispatcher uses the modified payload, not the original."
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {"$ref": "common.schema.json#/$defs/action_patch_operation"}
     },
-    "payload_hash": {
-      "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$",
-      "description": "Hash of the exact payload the approver decided on: the effective payload, meaning ProposedAction.payload with `modifications` already applied. Canonicalize with RFC 8785 (JCS), sha256 it, prefix `sha256:` and lowercase-hex it. The dispatcher recomputes this over the payload it is about to execute and refuses on mismatch. Required whenever `signature` is present."
-    },
-    "signature": {
-      "type": "string",
-      "description": "Optional. HMAC or signature over the RFC 8785 canonicalization of {proposal_id, decision, decided_by, decided_at, payload_hash}, using a per-tenant key. Required for high-risk actions on untrusted channels. payload_hash is inside the signed object on purpose: signing the decision alone binds who decided, not what they decided on, so the payload can be swapped under an unchanged proposal_id and every signature still verifies."
+    "policy_evaluation_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "signatures": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {"$ref": "common.schema.json#/$defs/signature"}
     },
     "rejection_settlement": {
       "type": "object",
-      "description": "Whether the side effect is actually known not to have happened. A decision of `rejected` or `expired` records what the approver wanted, not what the world looks like: a queue replay, a partial dispatch or a racing retry can land the effect anyway. A rejection nobody verified is an open incident wearing a resolved label, so the settlement is a separate fact with its own timestamp and its own author. Required whenever `decision` is `rejected` or `expired`.",
-      "required": [
-        "state"
-      ],
+      "required": ["state"],
       "additionalProperties": false,
       "properties": {
         "state": {
           "type": "string",
-          "enum": [
-            "verified_clean",
-            "compensated",
-            "unresolved"
-          ],
-          "description": "`verified_clean`: someone or something checked the target system and the effect is not there. `compensated`: the effect did land and a named compensating action reversed it — the original stays in the log, it is never deleted. `unresolved`: not yet checked. `unresolved` is a legitimate state to write and an illegitimate state to leave, so alert on its age rather than on its existence."
+          "enum": ["verified_clean", "compensated", "unresolved"]
         },
-        "verified_by": {
-          "type": "object",
-          "description": "Who or what established the state. A probe against the target system is stronger evidence than a person asserting it.",
-          "required": [
-            "kind",
-            "identifier"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "kind": {
-              "type": "string",
-              "enum": [
-                "human",
-                "probe",
-                "policy"
-              ]
-            },
-            "identifier": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 128
-            }
+        "verified_by": {"$ref": "common.schema.json#/$defs/actor"},
+        "verified_at": {"type": "string", "format": "date-time"},
+        "compensating_action_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "evidence": {"$ref": "common.schema.json#/$defs/evidence_reference"},
+        "note": {"type": "string", "maxLength": 2000}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"state": {"const": "verified_clean"}}, "required": ["state"]},
+          "then": {
+            "required": ["verified_by", "verified_at", "evidence"],
+            "not": {"required": ["compensating_action_id"]}
           }
         },
-        "verified_at": {
-          "type": "string",
-          "format": "date-time"
+        {
+          "if": {"properties": {"state": {"const": "compensated"}}, "required": ["state"]},
+          "then": {
+            "required": [
+              "verified_by",
+              "verified_at",
+              "compensating_action_id",
+              "evidence"
+            ]
+          }
         },
-        "compensating_action_id": {
-          "type": "string",
-          "description": "For `compensated`: the proposal_id of the action that reversed the effect. Compensation is itself a side effect and goes through this same gate.",
-          "pattern": "^[a-zA-Z0-9_-]+$",
-          "minLength": 8,
-          "maxLength": 64
-        },
-        "note": {
-          "type": "string",
-          "maxLength": 2000
+        {
+          "if": {"properties": {"state": {"const": "unresolved"}}, "required": ["state"]},
+          "then": {
+            "not": {
+              "anyOf": [
+                {"required": ["verified_by"]},
+                {"required": ["verified_at"]},
+                {"required": ["compensating_action_id"]},
+                {"required": ["evidence"]}
+              ]
+            }
+          }
         }
-      }
+      ]
     }
   },
   "allOf": [
     {
       "if": {
         "properties": {
-          "decision": {
-            "enum": [
-              "rejected",
-              "expired"
-            ]
+          "decided_by": {
+            "properties": {"kind": {"const": "human"}},
+            "required": ["kind"]
           }
         },
-        "required": [
-          "decision"
-        ]
+        "required": ["decided_by"]
       },
       "then": {
-        "required": [
-          "rejection_settlement"
-        ]
+        "properties": {
+          "decided_by": {
+            "properties": {
+              "authentication": {
+                "properties": {"human_present": {"const": true}},
+                "required": ["human_present"]
+              }
+            },
+            "required": ["authentication"]
+          }
+        }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "decided_by": {
+            "properties": {"kind": {"const": "policy"}},
+            "required": ["kind"]
+          }
+        },
+        "required": ["decided_by"]
+      },
+      "then": {
+        "properties": {
+          "decided_by": {
+            "properties": {
+              "authentication": {
+                "properties": {
+                  "method": {"const": "policy_engine"},
+                  "human_present": {"const": false}
+                },
+                "required": ["method", "human_present"]
+              }
+            },
+            "required": ["authentication"]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"decision": {"const": "approved"}}, "required": ["decision"]},
+      "then": {
+        "properties": {
+          "decided_by": {
+            "properties": {
+              "kind": {"const": "human"},
+              "authentication": {
+                "properties": {"human_present": {"const": true}},
+                "required": ["human_present"]
+              }
+            },
+            "required": ["authentication"]
+          },
+          "channel": {
+            "enum": ["telegram", "slack", "email", "web", "n8n_form"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"decision": {"const": "auto_approved"}},
+        "required": ["decision"]
+      },
+      "then": {
+        "required": ["policy_evaluation_id"],
+        "properties": {
+          "decided_by": {
+            "properties": {"kind": {"const": "policy"}}
+          },
+          "channel": {"const": "policy"}
+        },
+        "not": {"required": ["modifications"]}
+      }
+    },
+    {
+      "if": {
+        "properties": {"decision": {"enum": ["rejected", "expired"]}},
+        "required": ["decision"]
+      },
+      "then": {"required": ["rejection_settlement"]}
+    },
+    {
+      "if": {
+        "properties": {
+          "decision": {"enum": ["approved", "auto_approved", "cancelled", "failed"]}
+        },
+        "required": ["decision"]
+      },
+      "then": {"not": {"required": ["rejection_settlement"]}}
+    },
+    {
+      "if": {"required": ["modifications"]},
+      "then": {"properties": {"decision": {"const": "approved"}}}
     }
   ]
 }

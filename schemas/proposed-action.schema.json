@@ -1,34 +1,42 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/renezander030/agent-approval-gate/schemas/proposed-action.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v1.0.0/schemas/proposed-action.schema.json",
   "title": "ProposedAction",
-  "description": "An agent's draft of a side-effecting action. Always validated before reaching an approval queue. Always serialized — no executable code.",
+  "description": "An immutable, serializable action draft. The RFC 8785 SHA-256 digest of this complete document is the action_hash carried through approval and dispatch.",
   "type": "object",
-  "required": ["proposal_id", "agent", "action_type", "payload", "created_at", "tenant"],
+  "required": [
+    "schema_version",
+    "proposal_id",
+    "call_id",
+    "agent",
+    "action_type",
+    "payload_schema",
+    "payload",
+    "created_at",
+    "expires_at",
+    "tenant",
+    "risk",
+    "idempotency_key"
+  ],
   "additionalProperties": false,
   "properties": {
-    "proposal_id": {
-      "type": "string",
-      "description": "Unique ID for this proposal. Used to correlate proposal → approval → dispatch in the audit log.",
-      "pattern": "^[a-zA-Z0-9_-]+$",
-      "minLength": 8,
-      "maxLength": 64
-    },
+    "schema_version": {"$ref": "common.schema.json#/$defs/schema_version"},
+    "proposal_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "call_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "parent_call_id": {"$ref": "common.schema.json#/$defs/identifier"},
     "agent": {
       "type": "object",
-      "description": "Identifies the agent that produced this draft.",
-      "required": ["name", "version"],
+      "required": ["name", "version", "run_id"],
       "additionalProperties": false,
       "properties": {
-        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "version": { "type": "string", "minLength": 1, "maxLength": 32 },
-        "model": { "type": "string", "maxLength": 64 },
-        "run_id": { "type": "string", "maxLength": 64 }
+        "name": {"type": "string", "minLength": 1, "maxLength": 64},
+        "version": {"type": "string", "minLength": 1, "maxLength": 32},
+        "model": {"type": "string", "maxLength": 128},
+        "run_id": {"$ref": "common.schema.json#/$defs/identifier"}
       }
     },
     "action_type": {
       "type": "string",
-      "description": "Discriminator. The dispatcher routes on this value.",
       "enum": [
         "email.send",
         "crm.update_record",
@@ -38,35 +46,38 @@
         "n8n.trigger_workflow"
       ]
     },
-    "payload": {
+    "payload_schema": {
       "type": "object",
-      "description": "Action-specific payload. Validate against a per-action sub-schema before dispatch."
+      "required": ["id", "version", "digest"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "format": "uri", "maxLength": 2048},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "digest": {"$ref": "common.schema.json#/$defs/digest"}
+      }
     },
-    "rationale": {
-      "type": "string",
-      "description": "Why the agent thinks this action is correct. Surfaced to the approver. Not used by the dispatcher.",
-      "maxLength": 4000
-    },
-    "created_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "ISO 8601 timestamp of when the agent emitted the draft."
-    },
-    "tenant": {
-      "type": "string",
-      "description": "Tenant / workspace / organization scope. Approval and dispatch are tenant-scoped — never global.",
-      "minLength": 1,
-      "maxLength": 64
-    },
-    "expires_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Optional. Proposal is rejected if approved after this time. Prevents stale approvals from firing."
-    },
-    "risk": {
-      "type": "string",
-      "enum": ["low", "medium", "high"],
-      "description": "Optional. Used to route to different approval channels (e.g. low → auto-approve internal, high → mandatory human)."
+    "payload": {"type": "object"},
+    "rationale": {"type": "string", "maxLength": 4000},
+    "created_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "tenant": {"type": "string", "minLength": 1, "maxLength": 64},
+    "risk": {"type": "string", "enum": ["low", "medium", "high"]},
+    "idempotency_key": {"$ref": "common.schema.json#/$defs/identifier"},
+    "review_evidence": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {"$ref": "common.schema.json#/$defs/evidence_reference"}
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"action_type": {"const": "email.send"}},
+        "required": ["action_type"]
+      },
+      "then": {
+        "properties": {"payload": {"$ref": "actions/email.send.schema.json"}}
+      }
+    }
+  ]
 }

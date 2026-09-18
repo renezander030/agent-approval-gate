@@ -1,80 +1,191 @@
 # Architecture
 
-## The five contracts
+## Threat model
 
-This pattern only works if all five are present. Skipping any one of them turns the gate into theater.
+The gate assumes an agent can produce malformed input, repeat old messages, reorder
+calls, and try to route around policy. The agent must not possess the side-effect
+credential. Approval adapters, storage, the policy evaluator, and the deterministic
+dispatcher remain ordinary code inside the trusted boundary.
 
-### 1. ProposedAction — the agent never executes, only drafts
+The contracts defend four boundaries:
 
-The agent emits a `ProposedAction` and stops. It does not call the email API, the CRM API, or n8n directly. Whatever side effect the agent wants to cause must be expressible as a serializable payload.
+- **shape** — only versioned, action-specific documents enter the queue;
+- **identity** — a decision resolves one known pending request and call;
+- **integrity** — approval binds the exact effective action that will execute;
+- **outcome** — retries cannot turn an unknown provider result into a duplicate effect.
 
-Two reasons this matters:
+They do not make a platform-held signature independently verifiable against the
+platform itself. Email and Telegram compatibility remains an explicit design choice.
 
-- **Schema enforcement.** A serialized contract can be validated; a function call cannot. Agents that call APIs directly drift their parameter shape across runs and you only notice when production breaks.
-- **Bypass prevention.** If the agent has the API key, the approval step is optional from the agent's point of view. If only the dispatcher has the API key and the agent has no network reach to the side-effect surface, the approval step is *the* path.
+## 1. ProposedAction: the agent drafts and stops
 
-### 2. Schema validation — at the boundary, not inside the dispatcher
+The agent emits a `ProposedAction`; it never calls the side-effect API. The document
+includes stable proposal, call, run, tenant, payload-schema, expiry, risk, and
+idempotency identities. The dispatcher credential exists only beyond the approval
+boundary.
 
-`schemas/proposed-action.schema.json` is the contract. Validate the moment the proposal arrives at the queue, not later. The dispatcher should be allowed to assume the payload is well-formed.
+Validate the top-level schema and the payload schema at ingress. V1 ships a strict
+`email.send` reference. Other payload schemas live next to the dispatcher that owns
+them and follow the same `payload_schema` ID, version, and digest pattern.
 
-Per-`action_type` sub-schemas (e.g. `email.send` requires `to`, `subject`, `body_text`) live next to the dispatcher implementation, because they evolve with the integration. The top-level schema is stable; the sub-schemas are not.
+Canonicalize the complete proposal with RFC 8785 and hash the canonical bytes with
+SHA-256. Prefix the lowercase digest with `sha256:`. The result is the initial
+`action_hash`; changing the action type, call identity, tenant, arguments, expiry,
+risk, idempotency key, rationale, or payload-schema identity produces a new action.
 
-### 3. ApprovalRecord — the decision is its own document
+## 2. Policy evaluation and durable admission
 
-Approvals are not a flag on the proposal. They are a separate, append-only record. This matters when:
+Evaluate policy before notifying an approver. `ApprovalPolicySnapshot` records:
 
-- A proposal is approved, then auto-rejected because it expired before dispatch — both events need to be auditable.
-- Multiple approvers are required (e.g. high-risk actions). Each approver writes their own record.
-- A policy auto-approves under a rule. The record names the rule (`decided_by.kind = "policy"`, `identifier = "low-risk-internal-tenant"`), not a human.
+- immutable policy ID, human revision, and content digest;
+- one evaluation ID and a digest of the material inputs;
+- quorum, distinct-approver, human-only, channel, signature, and auto-approval rules.
 
-**Bind the record to the payload, not just to the proposal.** `proposal_id` is an indirection, so a record that carries only the id says "someone approved proposal X" without saying what X contained at the time. If anything between approve and dispatch rewrites the payload under an unchanged id (a queue retry, a partial re-draft, a compromised worker), the record still looks valid and the signature still verifies. Close it with `payload_hash`: canonicalize the effective payload with RFC 8785, sha256 it, and store the digest on the record. "Effective" means after `modifications` are applied, because that is what the approver actually saw and what the dispatcher will actually run. When a signature is present, the hash goes inside the signed object, otherwise you have signed the decision and left the bytes loose.
+The approval request embeds that snapshot. Callers never pass the policy fields as
+unrelated strings that can drift independently.
 
-**A rejection is a decision, not an outcome.** `decision: rejected` records what the approver wanted. It does not say the side effect failed to happen. A queue replay, a partial dispatch, or a retry racing the decision can land the effect anyway, and the record still reads as closed. So the settlement is a separate fact with its own author and its own timestamp: `verified_clean` when something checked the target system and the effect is not there, `compensated` when it did land and a named reversing action undid it, `unresolved` when nobody has looked yet.
+Persist `ApprovalRequest` before sending any link or message. It is the authority for
+whether a callback is pending. Resolve it with an atomic compare-and-set over at
+least `request_id`, current revision, tenant, callback nonce, action hash, and status.
+Payload shape is not identity authority.
 
-`unresolved` is a legitimate state to write and an illegitimate state to leave. Alert on its age, not on its existence. And compensation never deletes: the original record and the compensating action both stay in the log, because the fact that something was attempted and reversed is itself evidence somebody will need. A cleaned-up decline is the same class of bug as a stale tag silently dropped — a record treated as bookkeeping when it was evidence. (This three-state split came from [@manahshah](https://dev.to/manahshah), who arrived at it from a different kind of action entirely.)
+```text
+pending -> approved -> consumed
+        -> rejected
+        -> expired
+        -> cancelled
+        -> failed
+```
 
-**Record when you decided and when you found out.** `decided_at` is event time; `recorded_at` is when the gate persisted the record. On asynchronous channels these diverge, sometimes by minutes on an email reply and by much more on a replayed webhook. Ordering on arrival time is how stale context overwrites a newer human decision. Keep both: reason with `decided_at`, audit with `recorded_at`. Only one of them and you can reconstruct either what was true or when you learned it, never both, and the second is what answers why the dispatcher acted when it did. (Raised by [@zenovay](https://dev.to/zenovay).)
+Every transition increments `revision` and appends an audit event. Duplicate callbacks
+return the recorded terminal result; they do not write a second decision. A stale,
+unknown, cross-tenant, or already-consumed ID fails closed and is itself auditable.
 
-### 4. Dispatcher — plain code, no model
+Keep only the callback nonce hash in durable request and audit records. The raw nonce
+belongs in the one-time link and expires with the request.
 
-The dispatcher reads `(ProposedAction, ApprovalRecord)`, re-validates both, and executes the side effect. It is intentionally boring code. No prompt, no model call, no chain-of-thought.
+## 3. ApprovalRecord: bind the decision to bytes
 
-Before it executes, it runs one more check: recompute `payload_hash` over the payload it is about to send, and compare it to the hash on the `ApprovalRecord`. Mismatch is a hard refusal, logged as `not_dispatched` with reason `payload_hash_mismatch`. Never a warning, never a best-effort dispatch. This is the step that makes the approval bind to bytes instead of to a row id, and it costs one hash.
+One approver writes one append-only `ApprovalRecord`. The record always includes both:
 
-If you find yourself wanting the model to "decide how to dispatch," that is a sign the action_type enum is too coarse. Split it into more specific types instead of asking the model to branch.
+- `action_hash` — the RFC 8785 SHA-256 of the complete effective ProposedAction;
+- `payload_hash` — the RFC 8785 SHA-256 of the effective payload alone.
 
-### 5. Audit log — three rows minimum
+Approver edits are RFC 6902 JSON Patch operations restricted to `/payload`. Apply the
+patch to a copy of the original proposal, validate the resulting payload again, then
+compute the effective hashes. Never edit the stored proposal in place.
 
-For every proposal that leaves the agent, the log should grow by at least three append-only rows:
+For signed channels, sign the RFC 8785 canonicalization of the ApprovalRecord with the
+`signatures` property omitted. The signed object therefore covers request and proposal
+identity, both hashes, actor, event and ingestion time, channel, policy evaluation,
+and modifications. `key_id` makes rotation explicit.
 
-| event | timestamp | refs |
+### Actor invariants
+
+- `approved` requires a human actor, non-policy channel, and an authentication record
+  whose `human_present` value is true.
+- `auto_approved` requires a policy actor, the policy channel, and the exact
+  `policy_evaluation_id`; it is forbidden by a human-only policy.
+- A high-risk approval over email or Telegram requires a signature in the composed
+  envelope profile.
+- Quorum and role checks run across records in the semantic validator because JSON
+  Schema cannot compare a policy integer with an array length or enforce identity
+  uniqueness across documents.
+
+### Rejection settlement
+
+A rejected or expired decision states what the approver wanted, not whether an effect
+landed. Settlement remains a separate fact inside the record:
+
+- `verified_clean` requires who checked, when, and digest-addressed evidence;
+- `compensated` additionally requires the proposal ID of the reversing action;
+- `unresolved` deliberately forbids verification fields so it cannot look complete.
+
+`unresolved` is valid to write and invalid to ignore. Alert on its age. Compensation
+never deletes the original action or record.
+
+## 4. Consume once, then dispatch idempotently
+
+An approved request is consumed atomically before dispatch. Consumption binds one
+terminal decision set to one `dispatch_id`; a second consumer receives the existing
+result or a conflict, never a fresh execution grant.
+
+The deterministic dispatcher revalidates the proposal and effective payload, checks
+quorum and policy, recomputes both hashes, and sends the proposal's stable
+`idempotency_key` to the provider. Each attempt writes a `DispatchRecord` with a hard
+`max_attempts` ceiling.
+
+Provider outcomes are not boolean:
+
+| Status | Meaning | Retry rule |
 |---|---|---|
-| `proposed` | when the agent drafted | proposal_id |
-| `decided` | when the approver decided | proposal_id, approval channel, decided_by |
-| `dispatched` | when the dispatcher executed | proposal_id, side-effect outcome (success/failure, external IDs) |
+| `succeeded` | Provider accepted and returned authoritative evidence | Never retry |
+| `failed` | Provider authoritatively rejected or failed before acceptance | Retry only within policy and attempt ceiling |
+| `not_dispatched` | Gate refused before provider invocation | Never call the provider |
+| `outcome_unknown` | Request may have landed but the response was lost | Never retry blindly |
+| `reconciled_succeeded` | Read-only lookup proves the effect landed | Never retry |
+| `reconciled_not_applied` | Read-only lookup proves it did not land | A bounded retry may be allowed |
 
-If the proposal is rejected or expires, the third row is `not_dispatched` with the reason. The log should be queryable by `proposal_id` so the full lifecycle is one fetch.
+Reconciliation receives a lookup reference, not an execution credential. Retain the
+provider record and recovery reference long enough to cover the provider's idempotency
+window. If that evidence expires, preserve `unavailable`; do not rewrite uncertainty as
+failure.
+
+## 5. Audit stream: evidence, not authority
+
+Each proposal has one stream with monotonically increasing `sequence`. Event 1 has a
+null `previous_event_hash`. Every later event carries the prior event hash. Compute
+`event_hash` over the RFC 8785 canonical event with `event_hash` omitted.
+
+The chain detects deletion, insertion, reordering, duplication, and cross-stream
+splicing when a trusted checkpoint is retained separately. It does not prevent someone
+who controls both the stream and every checkpoint from rewriting all evidence.
+
+The stream records actor identity on every path, including validation rejection,
+notification, view, decision, expiry, refusal, unknown provider outcome, and
+reconciliation. It carries both `occurred_at` and `recorded_at`: event time answers
+what was true; ingestion time answers when the system learned it.
+
+Audit details contain hashes, reason codes, policy revision, timing, attempt number,
+and safe references. They never contain raw payloads, credentials, callback tokens,
+provider secrets, or unrestricted model transcripts. Classification and retention are
+explicit per event; deletion must also respect legal hold.
+
+## Schema and semantic validation
+
+JSON Schema enforces the shape and local conditional rules. It cannot recompute hashes,
+compare IDs across records, order timestamps, count a policy-defined quorum, or verify a
+hash chain. `scripts/validate_contracts.py` demonstrates those semantic checks over the
+release examples and negative corpus.
+
+Production systems should perform the same checks in their implementation language at
+each boundary, not invoke the repository's development script as a network service.
 
 ## Channel choice
 
-Approval channels in rough order of trust → friction:
+| Channel | Trust | Latency | Notes |
+|---|---:|---:|---|
+| Authenticated web | High | Low | Best place for strong human-presence evidence |
+| Slack signed interaction | High | Low | Verify the platform signature and tenant |
+| Telegram | Medium | Very low | Sign high-risk records and bind callback nonce |
+| Email | Low | High | Sign high-risk records; resist forwarding and replay |
+| n8n form | Medium | Low | Keep the request identity and callback validation outside the form fields |
+| Policy | Machine | Very low | Allowed only when the immutable policy snapshot permits auto approval |
 
-| Channel | Trust | Latency | Best for |
-|---|---|---|---|
-| Web UI (authenticated) | High | Low | Frequent approvers, mobile + desktop |
-| Slack DM (with signed buttons) | High | Low | Existing Slack-first teams |
-| Telegram bot | Medium | Very low | Solo operators, fast on mobile |
-| Email | Low | High | One-off / out-of-band only |
-| n8n form | Medium | Low | When the rest of the pipeline lives in n8n |
+A UI control that an automation-capable agent can click is not, by itself, a human
+boundary. `decided_by.authentication` records the host's actual assurance; it must not
+claim `human_present: true` unless the host can enforce that distinction.
 
-A signature on the `ApprovalRecord` is mandatory for high-risk actions on Telegram and email — both can be spoofed. For Slack with signed-buttons or an authenticated web UI, the channel itself provides the signature.
+## Explicit non-goals
 
-`payload_hash` is a separate question from the signature and applies on every channel, including the high-trust ones. The signature answers "was this decision authentic". The hash answers "was this the thing decided on". A trusted channel gives you the first for free and none of the second, because the mutation you are defending against happens after the approver clicks, on your side of the boundary.
+- Prompt-injection prevention. The gate limits consequences after an injection.
+- Rate limits, budgets, batching, and high-volume approval UX.
+- Automatic compensation. A compensating action is a new proposal through the gate.
+- ACL synchronization between source and destination systems. Surface the risk to the
+  approver in deployment-specific review evidence; enforce it in the integration.
+- Third-party-verifiable proof when the platform holds the signing key.
+- A framework, SDK, CLI, daemon, queue, hosted service, or MCP server.
 
-## What this pattern explicitly does not do
-
-- **It does not prevent prompt injection.** That is a different layer (input sanitization, system-prompt isolation). The gate stops a *successful* injection from causing real-world damage; it does not stop the injection from happening.
-- **It does not replace rate limits or budget caps.** A pipeline that drafts 10,000 proposals/minute will overwhelm the approver. Cap drafts at the source.
-- **It does not handle compensation.** If a dispatched action turns out to be wrong, the gate does not roll it back. Plan rollback per action_type. It does record compensation when you do it: `rejection_settlement.state = "compensated"` with the proposal_id of the reversing action, which itself goes through this gate.
-- **It does not propagate the source's access level to the destination.** A proposal drafted from a restricted source and written into a broader-permission project inherits the destination's ACL, not the origin's. The gate shows the approver where the content came from, so a person can catch it, but nothing enforces that the target ticket keeps the originating restriction. That is the right design and it is not built here. If you sync between systems with different access boundaries, treat this as an open gap rather than a solved one. (Named by [@zenovay](https://dev.to/zenovay).)
-- **It does not give you third-party-verifiable proof of approval.** The signature uses a per-tenant key that the platform holds, so the evidence and the executor sit inside the same trust boundary. That is enough to answer "did the agent do something nobody approved", which is the dispute that actually shows up. It is not enough if the approver themself is the contested party, because whoever holds the key could have written the record. Answering that needs a signature held by the person rather than the platform (passkey or similar), on a channel that can carry one, which rules out email and Telegram. `payload_hash` is orthogonal and worth having either way: it is what a per-person signature would have to cover anyway.
+The rejection-settlement split was originally contributed from a separate action-safety
+case by [@manahshah](https://dev.to/manahshah). The event-time and cross-system access
+boundary observations were raised by [@zenovay](https://dev.to/zenovay).
