@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 from copy import deepcopy
@@ -10,6 +11,8 @@ from pathlib import Path
 from typing import Any
 
 import rfc8785
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +35,10 @@ def digest_value(value: Any) -> str:
 
 def digest_file(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def base64url(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
 def main() -> None:
@@ -69,6 +76,77 @@ def main() -> None:
     approval["payload_hash"] = payload_hash
     approval["review_content_hash"] = review_snapshot["content_hash"]
     write("email-reply-approval-record.json", approval)
+
+    webauthn_approval = load("webauthn-approval-record.json")
+    webauthn_approval["action_hash"] = action_hash
+    webauthn_approval["payload_hash"] = payload_hash
+    webauthn_approval["review_content_hash"] = review_snapshot["content_hash"]
+    webauthn_approval.pop("signatures", None)
+    signed_object_hash = digest_value(webauthn_approval)
+    challenge = base64url(bytes.fromhex(signed_object_hash.removeprefix("sha256:")))
+    origin = "https://approve.acme-corp.example"
+    rp_id = "acme-corp.example"
+    client_data = json.dumps(
+        {
+            "type": "webauthn.get",
+            "challenge": challenge,
+            "origin": origin,
+            "crossOrigin": False,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    previous_sign_count = 8
+    sign_count = 9
+    authenticator_data = (
+        hashlib.sha256(rp_id.encode("utf-8")).digest()
+        + bytes([0x05])
+        + sign_count.to_bytes(4, "big")
+    )
+    private_key = ec.derive_private_key(20260925, ec.SECP256R1())
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.DER,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    credential_id = base64url(hashlib.sha256(public_key).digest())
+    signature_value = private_key.sign(
+        authenticator_data + hashlib.sha256(client_data).digest(),
+        ec.ECDSA(hashes.SHA256(), deterministic_signing=True),
+    )
+    registration = {
+        "credential_id": credential_id,
+        "credential_public_key": base64url(public_key),
+        "rp_id": rp_id,
+        "actor": webauthn_approval["decided_by"]["identifier"],
+        "previous_sign_count": previous_sign_count,
+    }
+    webauthn_approval["signatures"] = [
+        {
+            "algorithm": "webauthn-es256",
+            "key_id": credential_id,
+            "value": base64url(signature_value),
+            "signed_object_hash": signed_object_hash,
+            "webauthn": {
+                "credential_id": credential_id,
+                "credential_public_key": base64url(public_key),
+                "public_key_format": "spki-der",
+                "authenticator_data": base64url(authenticator_data),
+                "client_data_json": base64url(client_data),
+                "rp_id": rp_id,
+                "origin": origin,
+                "user_verification": "required",
+                "previous_sign_count": previous_sign_count,
+                "sign_count": sign_count,
+                "registration_evidence": {
+                    "kind": "webauthn_registration",
+                    "uri": "urn:acme:webauthn-registration:rene:2026-04-01",
+                    "digest": digest_value(registration),
+                    "label": "Independently retained credential registration",
+                },
+            },
+        }
+    ]
+    write("webauthn-approval-record.json", webauthn_approval)
 
     resolution = load("resolution-record.json")
     resolution["action_hash"] = action_hash
@@ -113,7 +191,7 @@ def main() -> None:
     write("audit-snapshot.json", audit_snapshot)
 
     envelope = {
-        "schema_version": "2.0.0",
+        "schema_version": "2.1.0",
         "captured_at": "2026-04-28T09:14:35Z",
         "proposal": proposal,
         "validations": [validation],

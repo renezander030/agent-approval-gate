@@ -53,7 +53,7 @@ Nine boundaries make the gate real:
 If the agent still has the side-effect credential, the approval path remains optional
 from the agent's point of view.
 
-## Contracts in v2.0.0
+## Contracts in v2.1.0
 
 | Contract | Purpose |
 |---|---|
@@ -71,7 +71,7 @@ from the agent's point of view.
 | [`approval-envelope.schema.json`](schemas/approval-envelope.schema.json) | Portable bundle plus cross-contract profile for a completed lifecycle |
 | [`actions/email.send.schema.json`](schemas/actions/email.send.schema.json) | Strict reference for composing action-specific payload contracts |
 
-Schema IDs are pinned to the `v2.0.0` release. Pin a released ID in production; do not
+Schema IDs are pinned to the `v2.1.0` release. Pin a released ID in production; do not
 resolve schemas from the mutable default branch.
 
 ## Quick start
@@ -105,6 +105,23 @@ RFC 8785 corpus with exact canonical UTF-8 bytes and SHA-256 results. Use it to 
 that implementations in different languages bind the same document to the same hash.
 [`tests/adversarial.json`](tests/adversarial.json) exercises deceptive identities,
 display controls, metadata injection, redaction boundaries, and review tampering.
+
+## Optional passkey proof
+
+Authenticated web approvals may carry a `webauthn-es256` signature. Its challenge is
+the SHA-256 of the RFC 8785 canonical `ApprovalRecord` with `signatures` omitted, so
+the passkey proof covers the exact action, payload, review snapshot, actor, decision,
+and policy evidence. The conformance validator checks the challenge, origin, RP ID,
+user-presence and user-verification flags, signature counter, P-256 key, and ES256
+signature. See
+[`examples/webauthn-approval-record.json`](examples/webauthn-approval-record.json).
+
+The profile includes digest-addressed registration evidence, but independent trust
+still depends on retaining that credential registration outside the platform being
+audited. WebAuthn signs a challenge, not readable action text; the approval UI must
+render the bound `ReviewSnapshot` immediately before invoking the passkey. The proof
+does not independently establish that a platform-controlled browser rendered that
+snapshot faithfully, so trusted client presentation remains a deployment boundary.
 
 ```bash
 python3 -m venv .venv
@@ -141,6 +158,7 @@ Those are trust-boundary components, not Code-node snippets. See
 - Not a prompt-injection filter, rate limiter, budget engine, or ACL synchronization
   service.
 - Not third-party-verifiable proof when the platform itself holds the signing key.
+- Not a WebAuthn UI, credential-registration service, or trust-anchor store.
 
 See [`docs/architecture.md`](docs/architecture.md) for the threat model and
 [`docs/contracts.md`](docs/contracts.md) for canonicalization, lifecycle, and

@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.1.0
+
+This release adds an optional WebAuthn proof profile for independently verifiable
+cryptographic attribution of high-risk approvals completed in an authenticated web UI.
+
+### Added
+
+- `webauthn-es256` approval signatures carrying the exact client data,
+  authenticator data, P-256 credential public key, RP ID, origin, signature counters,
+  and digest-addressed credential-registration evidence needed for offline checking.
+- A deterministic passkey approval example with a real ES256 assertion and negative
+  vectors for record binding, origin scope, signature counters, channel restrictions,
+  and cryptographic verification.
+- Semantic verification of the WebAuthn challenge, `webauthn.get` type, origin,
+  RP ID hash, user-presence and user-verification flags, signature counter, P-256 key,
+  and assertion signature.
+
+### Changed
+
+- Approval signatures may bind the SHA-256 of the RFC 8785 canonical approval record
+  with `signatures` omitted as the WebAuthn challenge.
+- WebAuthn proofs are restricted to high-assurance, human-present authenticated web
+  sessions. Existing HMAC and Ed25519 signature profiles are unchanged.
+- Schema IDs are pinned to the immutable `v2.1.0` release.
+
+### Migration
+
+Version 2.0 records remain valid against the v2.0.0 schemas. Adopt the v2.1.0 schemas
+only when producing or verifying the optional WebAuthn profile; do not rewrite stored
+records in place.
+
 ## 2.0.0
 
 This major release makes the approval lifecycle independently traceable from nested

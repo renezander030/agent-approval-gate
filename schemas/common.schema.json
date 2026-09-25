@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.0.0/schemas/common.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.1.0/schemas/common.schema.json",
   "title": "Agent Approval Gate common definitions",
   "$defs": {
     "schema_version": {
       "type": "string",
-      "const": "2.0.0"
+      "const": "2.1.0"
     },
     "identifier": {
       "type": "string",
@@ -14,6 +14,12 @@
     "digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "base64url": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192,
+      "pattern": "^[A-Za-z0-9_-]+$"
     },
     "safe_text": {
       "type": "string",
@@ -81,10 +87,76 @@
       "required": ["algorithm", "key_id", "value"],
       "additionalProperties": false,
       "properties": {
-        "algorithm": {"type": "string", "enum": ["hmac-sha256", "ed25519"]},
-        "key_id": {"type": "string", "minLength": 1, "maxLength": 128},
-        "value": {"type": "string", "pattern": "^[A-Za-z0-9_-]{32,}$"}
-      }
+        "algorithm": {
+          "type": "string",
+          "enum": ["hmac-sha256", "ed25519", "webauthn-es256"]
+        },
+        "key_id": {"type": "string", "minLength": 1, "maxLength": 1366},
+        "value": {"type": "string", "pattern": "^[A-Za-z0-9_-]{32,}$"},
+        "signed_object_hash": {"$ref": "#/$defs/digest"},
+        "webauthn": {
+          "type": "object",
+          "required": [
+            "credential_id",
+            "credential_public_key",
+            "public_key_format",
+            "authenticator_data",
+            "client_data_json",
+            "rp_id",
+            "origin",
+            "user_verification",
+            "previous_sign_count",
+            "sign_count",
+            "registration_evidence"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "credential_id": {"$ref": "#/$defs/base64url", "maxLength": 1366},
+            "credential_public_key": {"$ref": "#/$defs/base64url"},
+            "public_key_format": {"const": "spki-der"},
+            "authenticator_data": {"$ref": "#/$defs/base64url"},
+            "client_data_json": {"$ref": "#/$defs/base64url"},
+            "rp_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$"
+            },
+            "origin": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 2048,
+              "pattern": "^https://"
+            },
+            "user_verification": {"const": "required"},
+            "previous_sign_count": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+            "sign_count": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+            "registration_evidence": {
+              "$ref": "#/$defs/evidence_reference",
+              "properties": {"kind": {"const": "webauthn_registration"}}
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"algorithm": {"const": "webauthn-es256"}},
+            "required": ["algorithm"]
+          },
+          "then": {
+            "required": ["signed_object_hash", "webauthn"]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {"required": ["signed_object_hash"]},
+                {"required": ["webauthn"]}
+              ]
+            }
+          }
+        }
+      ]
     },
     "failure": {
       "type": "object",
@@ -158,7 +230,14 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["document", "preview", "policy", "provider_record", "reconciliation"]
+          "enum": [
+            "document",
+            "preview",
+            "policy",
+            "provider_record",
+            "reconciliation",
+            "webauthn_registration"
+          ]
         },
         "uri": {"type": "string", "format": "uri", "maxLength": 2048},
         "digest": {"$ref": "#/$defs/digest"},

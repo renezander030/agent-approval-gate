@@ -31,6 +31,12 @@
       "instance": "examples/email-reply-approval-record.json"
     },
     {
+      "name": "WebAuthn-bound web approval",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/webauthn-approval-record.json",
+      "webauthn": true
+    },
+    {
       "name": "rejected decision with settlement",
       "schema": "schemas/approval-record.schema.json",
       "instance": "examples/rejected-with-settlement-approval-record.json"
@@ -85,6 +91,154 @@
       "expect": "schema",
       "operations": [
         {"op": "remove", "path": "/action_hash"}
+      ]
+    },
+    {
+      "name": "WebAuthn challenge must bind the unsigned approval",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/webauthn-approval-record.json",
+      "expect": "semantic",
+      "webauthn": true,
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/signatures/0/signed_object_hash",
+          "value": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ]
+    },
+    {
+      "name": "WebAuthn proof must reject a changed approval record",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/webauthn-approval-record.json",
+      "expect": "semantic",
+      "webauthn": true,
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/comment",
+          "value": "This text was changed after the passkey ceremony."
+        }
+      ]
+    },
+    {
+      "name": "WebAuthn origin must match signed client data and RP scope",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/webauthn-approval-record.json",
+      "expect": "semantic",
+      "webauthn": true,
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/signatures/0/webauthn/origin",
+          "value": "https://attacker.example"
+        }
+      ]
+    },
+    {
+      "name": "WebAuthn sign count must match authenticator data",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/webauthn-approval-record.json",
+      "expect": "semantic",
+      "webauthn": true,
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/signatures/0/webauthn/sign_count",
+          "value": 10
+        }
+      ]
+    },
+    {
+      "name": "WebAuthn RP ID must match signed authenticator data",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/webauthn-approval-record.json",
+      "expect": "semantic",
+      "webauthn": true,
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/signatures/0/webauthn/rp_id",
+          "value": "attacker.example"
+        }
+      ]
+    },
+    {
+      "name": "WebAuthn approval requires signed user verification",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/webauthn-approval-record.json",
+      "expect": "semantic",
+      "webauthn": true,
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/signatures/0/webauthn/authenticator_data",
+          "value": "Bh4i5kXWgfgyp3-i_7Tc6tPg1gtE80-ZMLP6GootWYQBAAAACQ"
+        }
+      ]
+    },
+    {
+      "name": "WebAuthn counter must advance when counters are supported",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/webauthn-approval-record.json",
+      "expect": "semantic",
+      "webauthn": true,
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/signatures/0/webauthn/previous_sign_count",
+          "value": 9
+        }
+      ]
+    },
+    {
+      "name": "WebAuthn assertion signature must verify",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/webauthn-approval-record.json",
+      "expect": "semantic",
+      "webauthn": true,
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/signatures/0/value",
+          "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ]
+    },
+    {
+      "name": "WebAuthn proof is restricted to authenticated web approvals",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/webauthn-approval-record.json",
+      "expect": "schema",
+      "operations": [
+        {"op": "replace", "path": "/channel", "value": "email"}
+      ]
+    },
+    {
+      "name": "WebAuthn proof requires credential-registration evidence",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/webauthn-approval-record.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/signatures/0/webauthn/registration_evidence/kind",
+          "value": "document"
+        }
+      ]
+    },
+    {
+      "name": "WebAuthn registration evidence must bind the credential",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/webauthn-approval-record.json",
+      "expect": "semantic",
+      "webauthn": true,
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/signatures/0/webauthn/registration_evidence/digest",
+          "value": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
       ]
     },
     {
