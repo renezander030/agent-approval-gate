@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v1.0.0/schemas/dispatch-record.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.0.0/schemas/dispatch-record.schema.json",
   "title": "DispatchRecord",
   "description": "An append-only record for one deterministic dispatch attempt or reconciliation result. outcome_unknown is never an invitation to retry blindly.",
   "type": "object",
@@ -10,6 +10,7 @@
     "proposal_id",
     "request_id",
     "approval_ids",
+    "authority_snapshot_id",
     "action_hash",
     "idempotency_key",
     "attempt",
@@ -32,6 +33,7 @@
       "uniqueItems": true,
       "items": {"$ref": "common.schema.json#/$defs/identifier"}
     },
+    "authority_snapshot_id": {"$ref": "common.schema.json#/$defs/identifier"},
     "action_hash": {"$ref": "common.schema.json#/$defs/digest"},
     "idempotency_key": {"$ref": "common.schema.json#/$defs/identifier"},
     "attempt": {"type": "integer", "minimum": 1},
@@ -60,6 +62,9 @@
         "action_hash_mismatch",
         "payload_hash_mismatch",
         "policy_mismatch",
+        "authority_revoked",
+        "authority_unknown",
+        "authority_check_failed",
         "provider_rejected",
         "provider_timeout",
         "provider_response_lost",

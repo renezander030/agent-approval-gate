@@ -1,0 +1,40 @@
+{
+  "schema_version": "2.0.0",
+  "validation_id": "validation_2026-04-28_841ac000",
+  "proposal_id": "prop_2026-04-28_b3f1a2c4",
+  "action_hash": "sha256:5a55a6cd79b06fd551ffbf941068f2f96c2fb735235d91cfd55cbd79a2766499",
+  "validator": {
+    "kind": "system",
+    "identifier": "approval-validator",
+    "authentication": {
+      "method": "service_identity",
+      "human_present": false,
+      "assurance": "high",
+      "authenticated_at": "2026-04-28T09:14:24Z"
+    }
+  },
+  "validated_at": "2026-04-28T09:14:24Z",
+  "outcome": "passed",
+  "checks": [
+    {
+      "name": "proposal_schema",
+      "status": "passed"
+    },
+    {
+      "name": "payload_schema",
+      "status": "passed"
+    },
+    {
+      "name": "semantic_preconditions",
+      "status": "passed"
+    },
+    {
+      "name": "policy_inputs",
+      "status": "passed"
+    },
+    {
+      "name": "authorization_inputs",
+      "status": "passed"
+    }
+  ]
+}

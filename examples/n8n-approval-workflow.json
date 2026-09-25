@@ -1,10 +1,10 @@
 {
-  "name": "agent-approval-gate v1 reference",
+  "name": "agent-approval-gate v2 reference",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "agent-proposal-v1",
+        "path": "agent-proposal-v2",
         "responseMode": "onReceived",
         "options": {}
       },
@@ -13,12 +13,12 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [0, 300],
-      "webhookId": "agent-proposal-v1"
+      "webhookId": "agent-proposal-v2"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_VALIDATOR_URL + '/v1/validate'}}",
+        "url": "={{$env.APPROVAL_VALIDATOR_URL + '/v2/validate'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -32,7 +32,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [240, 300],
-      "notes": "The validator returns {valid, instance, errors}. It must enforce Draft 2020-12 plus format checks."
+      "notes": "The validator returns {valid, instance, validation, errors}. It must enforce Draft 2020-12, formats, payload checks, semantics, and policy/authority input checks."
     },
     {
       "parameters": {
@@ -68,11 +68,67 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_GATE_URL + '/v1/requests'}}",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v2/validations'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ proposal: $json.instance, policy_id: $env.APPROVAL_POLICY_ID, resume_url: $execution.resumeUrl + '/decision' }) }}",
+        "body": "={{ JSON.stringify({ proposal: $json.instance, validation: $json.validation }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "b5f402b9-7bc8-4376-844a-97b7295b6d5f",
+      "name": "Persist validation record",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 180],
+      "notes": "The gate accepts only a passed ValidationRecord whose proposal and action hash match the validated instance."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v2/validations'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ validation: $json.validation }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "8048850a-70c5-4cbd-8045-8a6c75ce25d6",
+      "name": "Persist rejected validation record",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 540],
+      "notes": "Rejected validation is durable evidence, but it never creates an approval request."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/events'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ event_type: 'validation.passed', validation_id: $('Validate full JSON Schema').item.json.validation.validation_id, proposal_id: $('Validate full JSON Schema').item.json.instance.proposal_id, action_hash: $('Validate full JSON Schema').item.json.validation.action_hash, occurred_at: $now.toUTC().toISO() }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "d697f5f1-cd8c-47c8-aabb-92a8c20d2058",
+      "name": "Append validation passed event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v2/requests'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ validation_id: $('Validate full JSON Schema').item.json.validation.validation_id, proposal: $('Validate full JSON Schema').item.json.instance, policy_id: $env.APPROVAL_POLICY_ID, resume_url: $execution.resumeUrl + '/decision' }) }}",
         "options": {
           "timeout": 10000
         }
@@ -81,31 +137,68 @@
       "name": "Create durable approval request",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [720, 180],
-      "notes": "This endpoint persists the request before notification and returns request_id, action_hash, review_url, and a redacted preview."
+      "position": [1200, 180],
+      "notes": "This endpoint persists a request bound to the passed validation before notification."
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_AUDIT_URL + '/v1/events'}}",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/events'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ event_type: 'approval.requested', request_id: $json.request_id, proposal_id: $json.proposal_id, action_hash: $json.action_hash, occurred_at: $now.toUTC().toISO() }) }}",
+        "body": "={{ JSON.stringify({ event_type: 'approval.requested', request_id: $json.request_id, validation_id: $json.validation_id, proposal_id: $json.proposal_id, action_hash: $json.action_hash, occurred_at: $now.toUTC().toISO() }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "1198df17-6297-4b6c-bd15-959e44e086bb",
+      "name": "Append approval requested event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v2/review-snapshots'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ request_id: $('Create durable approval request').item.json.request_id, proposal_id: $('Create durable approval request').item.json.proposal_id, validation_id: $('Create durable approval request').item.json.validation_id, locale: 'en' }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "6d6b82a3-f488-42b3-a7fb-58ab2593ce86",
+      "name": "Persist review snapshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1680, 180],
+      "notes": "The gate renders and stores the complete arguments, target, risk, expiry, policy summary, and their canonical content hash before notification."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/events'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ event_type: 'review.presented', request_id: $json.request_id, proposal_id: $json.proposal_id, action_hash: $json.action_hash, review_snapshot_id: $json.snapshot_id, review_content_hash: $json.content_hash, occurred_at: $now.toUTC().toISO() }) }}",
         "options": {
           "timeout": 10000
         }
       },
       "id": "522032f5-443d-4ad9-801d-65b50357bdb8",
-      "name": "Append requested audit event",
+      "name": "Append review presented event",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [960, 180]
+      "position": [1920, 180]
     },
     {
       "parameters": {
         "chatId": "={{$env.TG_APPROVER_CHAT_ID}}",
-        "text": "=*Approval required*\nRequest: `{{$('Create durable approval request').item.json.request_id}}`\nAction hash: `{{$('Create durable approval request').item.json.action_hash}}`\nExpires: {{$('Create durable approval request').item.json.expires_at}}\n\n{{$('Create durable approval request').item.json.preview}}\n\nReview and decide: {{$('Create durable approval request').item.json.review_url}}",
+        "text": "=*Approval required*\nRequest: `{{$('Persist review snapshot').item.json.request_id}}`\nAction hash: `{{$('Persist review snapshot').item.json.action_hash}}`\nReview hash: `{{$('Persist review snapshot').item.json.content_hash}}`\nExpires: {{$('Persist review snapshot').item.json.expires_at}}\n\n{{$('Persist review snapshot').item.json.preview}}\n\nReview and decide: {{$('Persist review snapshot').item.json.review_url}}",
         "additionalFields": {
           "parse_mode": "Markdown"
         }
@@ -114,7 +207,7 @@
       "name": "Send signed review link",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [1200, 180],
+      "position": [2160, 180],
       "notes": "Assign Telegram credentials after import. The link targets the approval service, which verifies identity and posts a signed callback to the resume URL."
     },
     {
@@ -135,13 +228,13 @@
       "name": "Wait for signed callback",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [1440, 180],
-      "webhookId": "agent-approval-resume-v1"
+      "position": [2400, 180],
+      "webhookId": "agent-approval-resume-v2"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_GATE_URL + '/v1/requests/' + $('Create durable approval request').item.json.request_id + '/resolve'}}",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v2/requests/' + $('Create durable approval request').item.json.request_id + '/resolve'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -154,8 +247,45 @@
       "name": "Resolve callback atomically",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1680, 180],
+      "position": [2640, 180],
       "notes": "The approval service rejects stale, duplicate, cross-tenant, bad-signature, wrong-action, and already-consumed callbacks."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v2/resolutions'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ resolution: $json.resolution, delivery_target: $json.delivery_target }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "997d9682-a77f-421c-a88f-bf35273f2513",
+      "name": "Deliver durable resolution",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2880, 180],
+      "notes": "Delivery retries reuse the same terminal ResolutionRecord and target hash; they never repeat the decision."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/events'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ event_type: 'resolution.emitted', request_id: $('Resolve callback atomically').item.json.request_id, approval_id: $('Resolve callback atomically').item.json.approval.approval_id, resolution_id: $json.resolution_id, action_hash: $('Resolve callback atomically').item.json.approval.action_hash, delivery_status: $json.delivery.status, occurred_at: $now.toUTC().toISO() }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "a2a5df58-c22e-4bfa-a107-fe8a1afea6cd",
+      "name": "Append resolution audit event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3120, 180]
     },
     {
       "parameters": {
@@ -169,7 +299,7 @@
           "conditions": [
             {
               "id": "25350d41-e139-4473-b97d-c5e5c18d76fc",
-              "leftValue": "={{$json.status}}",
+              "leftValue": "={{$('Resolve callback atomically').item.json.status}}",
               "rightValue": "approved",
               "operator": {
                 "type": "string",
@@ -185,16 +315,16 @@
       "name": "Approved?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [1920, 180]
+      "position": [3360, 180]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_GATE_URL + '/v1/requests/' + $('Create durable approval request').item.json.request_id + '/consume'}}",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v2/requests/' + $('Create durable approval request').item.json.request_id + '/consume'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ approval_id: $json.approval.approval_id, expected_revision: $json.request_revision }) }}",
+        "body": "={{ JSON.stringify({ approval_id: $('Resolve callback atomically').item.json.approval.approval_id, expected_revision: $('Resolve callback atomically').item.json.request_revision }) }}",
         "options": {
           "timeout": 10000
         }
@@ -203,7 +333,74 @@
       "name": "Consume approval once",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2160, 60]
+      "position": [3600, 60]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v2/authority-snapshots'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ request_id: $('Create durable approval request').item.json.request_id, approval_id: $('Resolve callback atomically').item.json.approval.approval_id, action_hash: $json.action_hash }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "a497b577-1e2f-4460-8dca-d77804d9c781",
+      "name": "Revalidate dispatch authority",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3840, 60],
+      "notes": "The gate snapshots current approver, policy, workspace, and dispatcher authority. Revoked, unknown, incomplete, or stale status fails closed."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/events'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ event_type: 'authority.checked', request_id: $('Create durable approval request').item.json.request_id, approval_id: $('Resolve callback atomically').item.json.approval.approval_id, authority_snapshot_id: $json.authority_snapshot_id, action_hash: $json.action_hash, status: $json.status, occurred_at: $now.toUTC().toISO() }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "7fe207f6-a2d7-43a5-9790-d5ab2e05df94",
+      "name": "Append authority audit event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4080, 60]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "75e37b0b-6044-47c7-aa13-57979639d12e",
+              "leftValue": "={{$('Revalidate dispatch authority').item.json.status}}",
+              "rightValue": "active",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e48536df-c13a-4b3f-a8a3-06b84c00254c",
+      "name": "Authority active?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [4320, 60]
     },
     {
       "parameters": {
@@ -214,18 +411,22 @@
           "parameters": [
             {
               "name": "Idempotency-Key",
-              "value": "={{$json.proposal.idempotency_key}}"
+              "value": "={{$('Consume approval once').item.json.proposal.idempotency_key}}"
             },
             {
               "name": "X-Approval-Grant",
-              "value": "={{$json.single_use_grant}}"
+              "value": "={{$('Consume approval once').item.json.single_use_grant}}"
+            },
+            {
+              "name": "X-Authority-Snapshot",
+              "value": "={{$('Revalidate dispatch authority').item.json.authority_snapshot_id}}"
             }
           ]
         },
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ proposal: $json.proposal, approval: $json.approval, action_hash: $json.action_hash }) }}",
+        "body": "={{ JSON.stringify({ proposal: $('Consume approval once').item.json.proposal, approval: $('Consume approval once').item.json.approval, action_hash: $('Consume approval once').item.json.action_hash, authority_snapshot_id: $json.authority_snapshot_id }) }}",
         "options": {
           "timeout": 30000
         }
@@ -234,12 +435,12 @@
       "name": "Dispatch exactly once",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2400, 60]
+      "position": [4560, -60]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_AUDIT_URL + '/v1/events'}}",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/events'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -252,16 +453,16 @@
       "name": "Append dispatch audit event",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2640, 60]
+      "position": [4800, -60]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_AUDIT_URL + '/v1/events'}}",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/events'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ event_type: 'dispatch.not_dispatched', request_id: $('Create durable approval request').item.json.request_id, terminal_status: $json.status || 'expired', reason: $json.reason || 'no_approval', recorded_at: $now.toUTC().toISO() }) }}",
+        "body": "={{ JSON.stringify({ event_type: 'dispatch.not_dispatched', request_id: $('Create durable approval request').item.json.request_id, terminal_status: $json.status || $('Resolve callback atomically').item.json.status || 'expired', reason: $json.reason || 'no_approval_or_authority', recorded_at: $now.toUTC().toISO() }) }}",
         "options": {
           "timeout": 10000
         }
@@ -270,16 +471,35 @@
       "name": "Append terminal refusal event",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2160, 300]
+      "position": [4560, 300]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_AUDIT_URL + '/v1/events'}}",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/snapshots'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ event_type: 'validation.rejected', errors: $json.errors, recorded_at: $now.toUTC().toISO() }) }}",
+        "body": "={{ JSON.stringify({ request_id: $('Create durable approval request').item.json.request_id, complete: true }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "0b9477b6-ff9f-47dd-b950-2be2ab306aef",
+      "name": "Export complete audit snapshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [5040, 180],
+      "notes": "The audit sink returns the count, sequence bounds, canonical event-set digest, and terminal event hash for the completed run."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/events'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ event_type: 'validation.rejected', validation_id: $json.validation_id, errors: $('Validate full JSON Schema').item.json.errors, recorded_at: $now.toUTC().toISO() }) }}",
         "options": {
           "timeout": 10000
         }
@@ -288,7 +508,26 @@
       "name": "Append validation rejection",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [720, 420]
+      "position": [960, 540]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/snapshots'}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ validation_id: $('Persist rejected validation record').item.json.validation_id, complete: true }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "bf3c0d78-ab02-4124-8645-ab5612c1c0ab",
+      "name": "Export rejected validation snapshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 540],
+      "notes": "Even a pre-admission refusal receives a complete audit export for its validation stream."
     }
   ],
   "connections": {
@@ -300,14 +539,29 @@
     },
     "Contract valid?": {
       "main": [
-        [{"node": "Create durable approval request", "type": "main", "index": 0}],
-        [{"node": "Append validation rejection", "type": "main", "index": 0}]
+        [{"node": "Persist validation record", "type": "main", "index": 0}],
+        [{"node": "Persist rejected validation record", "type": "main", "index": 0}]
       ]
     },
-    "Create durable approval request": {
-      "main": [[{"node": "Append requested audit event", "type": "main", "index": 0}]]
+    "Persist validation record": {
+      "main": [[{"node": "Append validation passed event", "type": "main", "index": 0}]]
     },
-    "Append requested audit event": {
+    "Append validation passed event": {
+      "main": [[{"node": "Create durable approval request", "type": "main", "index": 0}]]
+    },
+    "Persist rejected validation record": {
+      "main": [[{"node": "Append validation rejection", "type": "main", "index": 0}]]
+    },
+    "Create durable approval request": {
+      "main": [[{"node": "Append approval requested event", "type": "main", "index": 0}]]
+    },
+    "Append approval requested event": {
+      "main": [[{"node": "Persist review snapshot", "type": "main", "index": 0}]]
+    },
+    "Persist review snapshot": {
+      "main": [[{"node": "Append review presented event", "type": "main", "index": 0}]]
+    },
+    "Append review presented event": {
       "main": [[{"node": "Send signed review link", "type": "main", "index": 0}]]
     },
     "Send signed review link": {
@@ -317,6 +571,12 @@
       "main": [[{"node": "Resolve callback atomically", "type": "main", "index": 0}]]
     },
     "Resolve callback atomically": {
+      "main": [[{"node": "Deliver durable resolution", "type": "main", "index": 0}]]
+    },
+    "Deliver durable resolution": {
+      "main": [[{"node": "Append resolution audit event", "type": "main", "index": 0}]]
+    },
+    "Append resolution audit event": {
       "main": [[{"node": "Approved?", "type": "main", "index": 0}]]
     },
     "Approved?": {
@@ -326,10 +586,31 @@
       ]
     },
     "Consume approval once": {
-      "main": [[{"node": "Dispatch exactly once", "type": "main", "index": 0}]]
+      "main": [[{"node": "Revalidate dispatch authority", "type": "main", "index": 0}]]
+    },
+    "Revalidate dispatch authority": {
+      "main": [[{"node": "Append authority audit event", "type": "main", "index": 0}]]
+    },
+    "Append authority audit event": {
+      "main": [[{"node": "Authority active?", "type": "main", "index": 0}]]
+    },
+    "Authority active?": {
+      "main": [
+        [{"node": "Dispatch exactly once", "type": "main", "index": 0}],
+        [{"node": "Append terminal refusal event", "type": "main", "index": 0}]
+      ]
     },
     "Dispatch exactly once": {
       "main": [[{"node": "Append dispatch audit event", "type": "main", "index": 0}]]
+    },
+    "Append dispatch audit event": {
+      "main": [[{"node": "Export complete audit snapshot", "type": "main", "index": 0}]]
+    },
+    "Append terminal refusal event": {
+      "main": [[{"node": "Export complete audit snapshot", "type": "main", "index": 0}]]
+    },
+    "Append validation rejection": {
+      "main": [[{"node": "Export rejected validation snapshot", "type": "main", "index": 0}]]
     }
   },
   "active": false,

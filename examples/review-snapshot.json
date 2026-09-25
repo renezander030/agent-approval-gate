@@ -1,0 +1,44 @@
+{
+  "schema_version": "2.0.0",
+  "snapshot_id": "review_2026-04-28_47b2c000",
+  "proposal_id": "prop_2026-04-28_b3f1a2c4",
+  "action_hash": "sha256:5a55a6cd79b06fd551ffbf941068f2f96c2fb735235d91cfd55cbd79a2766499",
+  "payload_hash": "sha256:c919182dcf3aa49d95f5927636aeb7a6a227fa9f9b3daa7384ac4c531a9f891b",
+  "content_hash": "sha256:1496a0bf99cb54f169a7deb5e57ec48be882f1859fbd39cc2014563d3a250636",
+  "rendered_at": "2026-04-28T09:14:26Z",
+  "renderer": {
+    "name": "approval-email-renderer",
+    "version": "2.0.0",
+    "format": "json"
+  },
+  "locale": "en-US",
+  "content": {
+    "action_type": "email.send",
+    "action_identity": {
+      "proposal_id": "prop_2026-04-28_b3f1a2c4",
+      "call_id": "call_2026-04-28_7e19c5ad",
+      "agent_identity": "agent.support-triage.prod"
+    },
+    "target": {
+      "from": "support@acme-corp.example",
+      "to": [
+        "customer@example.com"
+      ],
+      "cc": []
+    },
+    "arguments": {
+      "from": "support@acme-corp.example",
+      "to": [
+        "customer@example.com"
+      ],
+      "cc": [],
+      "subject": "Re: cannot export invoices for March",
+      "body_text": "Hi,\n\nThanks for the report. The export endpoint was rate-limited above the documented threshold last week — we've raised it back to 50 req/min. Please retry the March export and let us know if it still fails.\n\nIf you need the data sooner, I can run the export on our side and email you the CSV directly.\n\nBest,\nSupport",
+      "in_reply_to_message_id": "<CADx7HnZ@example.com>",
+      "ticket_id": "ZD-48211"
+    },
+    "risk": "high",
+    "expires_at": "2026-04-28T17:14:23Z",
+    "policy_summary": "One distinct customer-support approver; email decisions require a signature."
+  }
+}

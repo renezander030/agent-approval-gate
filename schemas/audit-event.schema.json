@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v1.0.0/schemas/audit-event.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.0.0/schemas/audit-event.schema.json",
   "title": "ApprovalAuditEvent",
   "description": "A redacted, append-only lifecycle event. event_hash is the RFC 8785 SHA-256 digest of this document with event_hash omitted; previous_event_hash links the stream.",
   "type": "object",
@@ -39,19 +39,25 @@
       "type": "string",
       "enum": [
         "proposal.received",
+        "validation.passed",
         "validation.rejected",
+        "review.presented",
         "approval.requested",
         "approval.notified",
         "approval.viewed",
         "approval.decided",
         "approval.expired",
         "approval.cancelled",
+        "resolution.emitted",
+        "resolution.acknowledged",
+        "authority.checked",
         "dispatch.started",
         "dispatch.succeeded",
         "dispatch.failed",
         "dispatch.outcome_unknown",
         "dispatch.reconciled",
-        "dispatch.not_dispatched"
+        "dispatch.not_dispatched",
+        "audit.snapshotted"
       ]
     },
     "occurred_at": {"type": "string", "format": "date-time"},
@@ -77,9 +83,14 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "validation_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "review_snapshot_id": {"$ref": "common.schema.json#/$defs/identifier"},
         "request_id": {"$ref": "common.schema.json#/$defs/identifier"},
         "approval_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "resolution_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "authority_snapshot_id": {"$ref": "common.schema.json#/$defs/identifier"},
         "dispatch_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "audit_snapshot_id": {"$ref": "common.schema.json#/$defs/identifier"},
         "policy_evaluation_id": {"$ref": "common.schema.json#/$defs/identifier"}
       }
     },
@@ -87,7 +98,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "reason_code": {"type": "string", "minLength": 1, "maxLength": 128},
+        "reason_code": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{2,127}$"},
         "decision": {
           "type": "string",
           "enum": ["approved", "rejected", "expired", "cancelled", "auto_approved", "failed"]
@@ -98,6 +109,7 @@
         },
         "action_hash": {"$ref": "common.schema.json#/$defs/digest"},
         "payload_hash": {"$ref": "common.schema.json#/$defs/digest"},
+        "review_content_hash": {"$ref": "common.schema.json#/$defs/digest"},
         "policy_revision": {"type": "string", "minLength": 1, "maxLength": 128},
         "wait_ms": {"type": "integer", "minimum": 0},
         "attempt": {"type": "integer", "minimum": 1},
@@ -105,8 +117,12 @@
         "metadata": {
           "type": "object",
           "maxProperties": 20,
+          "propertyNames": {"pattern": "^[a-z][a-z0-9_.-]{0,63}$"},
           "additionalProperties": {
-            "type": ["string", "number", "integer", "boolean", "null"]
+            "oneOf": [
+              {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 256},
+              {"type": ["number", "integer", "boolean", "null"]}
+            ]
           }
         }
       }

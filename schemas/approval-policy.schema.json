@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v1.0.0/schemas/approval-policy.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.0.0/schemas/approval-policy.schema.json",
   "title": "ApprovalPolicySnapshot",
   "description": "Immutable evidence of the policy revision and material inputs that selected an approval path.",
   "type": "object",
@@ -30,7 +30,8 @@
         "distinct_approvers",
         "human_only",
         "allowed_channels",
-        "allow_auto_approval"
+        "allow_auto_approval",
+        "separation_of_duties"
       ],
       "additionalProperties": false,
       "properties": {
@@ -59,6 +60,39 @@
           "type": "array",
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 1, "maxLength": 64}
+        },
+        "separation_of_duties": {
+          "type": "object",
+          "required": [
+            "requester_must_not_approve",
+            "agent_must_not_approve",
+            "distinct_signing_keys"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "requester_must_not_approve": {"type": "boolean"},
+            "agent_must_not_approve": {"type": "boolean"},
+            "distinct_signing_keys": {"type": "boolean"},
+            "eligible_approver_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 256,
+              "uniqueItems": true,
+              "items": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 128}
+            },
+            "excluded_actor_ids": {
+              "type": "array",
+              "maxItems": 256,
+              "uniqueItems": true,
+              "items": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 128}
+            },
+            "excluded_key_ids": {
+              "type": "array",
+              "maxItems": 256,
+              "uniqueItems": true,
+              "items": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 128}
+            }
+          }
         }
       }
     }

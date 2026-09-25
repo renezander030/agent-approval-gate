@@ -7,11 +7,13 @@ calls, and try to route around policy. The agent must not possess the side-effec
 credential. Approval adapters, storage, the policy evaluator, and the deterministic
 dispatcher remain ordinary code inside the trusted boundary.
 
-The contracts defend four boundaries:
+The contracts defend six boundaries:
 
 - **shape** — only versioned, action-specific documents enter the queue;
 - **identity** — a decision resolves one known pending request and call;
+- **provenance** — nested delegation preserves stable agents and parent call identity;
 - **integrity** — approval binds the exact effective action that will execute;
+- **authority** — eligibility and authorization are checked at decision and dispatch;
 - **outcome** — retries cannot turn an unknown provider result into a duplicate effect.
 
 They do not make a platform-held signature independently verifiable against the
@@ -20,11 +22,12 @@ platform itself. Email and Telegram compatibility remains an explicit design cho
 ## 1. ProposedAction: the agent drafts and stops
 
 The agent emits a `ProposedAction`; it never calls the side-effect API. The document
-includes stable proposal, call, run, tenant, payload-schema, expiry, risk, and
-idempotency identities. The dispatcher credential exists only beyond the approval
-boundary.
+includes stable proposal, call, run, agent, delegation, tenant, payload-schema,
+expiry, risk, and idempotency identities. The dispatcher credential exists only
+beyond the approval boundary. Nested calls preserve their parent IDs; repeated display
+names never substitute for stable agent identity.
 
-Validate the top-level schema and the payload schema at ingress. V1 ships a strict
+Validate the top-level schema and the payload schema at ingress. Version 2 ships a strict
 `email.send` reference. Other payload schemas live next to the dispatcher that owns
 them and follow the same `payload_schema` ID, version, and digest pattern.
 
@@ -33,13 +36,19 @@ SHA-256. Prefix the lowercase digest with `sha256:`. The result is the initial
 `action_hash`; changing the action type, call identity, tenant, arguments, expiry,
 risk, idempotency key, rationale, or payload-schema identity produces a new action.
 
-## 2. Policy evaluation and durable admission
+## 2. Validation, policy evaluation, and durable admission
+
+Write a `ValidationRecord` for the exact action before notifying an approver. It names
+the validator and records structural, payload, semantic, policy-input, and
+authorization-input checks. Only `passed` is admissible; rejected, failed, absent, or
+mismatched validation fails closed.
 
 Evaluate policy before notifying an approver. `ApprovalPolicySnapshot` records:
 
 - immutable policy ID, human revision, and content digest;
 - one evaluation ID and a digest of the material inputs;
-- quorum, distinct-approver, human-only, channel, signature, and auto-approval rules.
+- quorum, distinct-approver, human-only, channel, signature, auto-approval, and
+  separation-of-duties rules.
 
 The approval request embeds that snapshot. Callers never pass the policy fields as
 unrelated strings that can drift independently.
@@ -63,6 +72,11 @@ unknown, cross-tenant, or already-consumed ID fails closed and is itself auditab
 
 Keep only the callback nonce hash in durable request and audit records. The raw nonce
 belongs in the one-time link and expires with the request.
+
+Before notification, persist a `ReviewSnapshot` containing the complete arguments and
+other decision material rendered to the approver. The request and decision carry its
+identity, and the decision also carries its content hash. A callback for a stale or
+altered display fails even when the underlying request ID still exists.
 
 ## 3. ApprovalRecord: bind the decision to bytes
 
@@ -91,6 +105,8 @@ and modifications. `key_id` makes rotation explicit.
 - Quorum and role checks run across records in the semantic validator because JSON
   Schema cannot compare a policy integer with an array length or enforce identity
   uniqueness across documents.
+- Separation-of-duties checks compare stable actor, requester, agent, eligibility,
+  exclusion, and signing-key identities; display names do not participate.
 
 ### Rejection settlement
 
@@ -104,7 +120,18 @@ landed. Settlement remains a separate fact inside the record:
 `unresolved` is valid to write and invalid to ignore. Alert on its age. Compensation
 never deletes the original action or record.
 
-## 4. Consume once, then dispatch idempotently
+## 4. Deliver the terminal resolution
+
+Emit a `ResolutionRecord` for every decision. It binds the complete approval record,
+proposal, call, action hash, terminal disposition, and delivery target. A failed agent
+resume retries delivery of the same receipt; it never repeats approval, changes the
+decision, or creates a second execution grant.
+
+## 5. Revalidate authority, consume once, then dispatch idempotently
+
+Immediately before dispatch, snapshot the current status of the approving identity,
+policy, workspace, and dispatcher. Missing, revoked, unknown, stale, or digest-invalid
+authority fails closed without provider invocation.
 
 An approved request is consumed atomically before dispatch. Consumption binds one
 terminal decision set to one `dispatch_id`; a second consumer receives the existing
@@ -131,7 +158,7 @@ provider record and recovery reference long enough to cover the provider's idemp
 window. If that evidence expires, preserve `unavailable`; do not rewrite uncertainty as
 failure.
 
-## 5. Audit stream: evidence, not authority
+## 6. Audit stream and complete export: evidence, not authority
 
 Each proposal has one stream with monotonically increasing `sequence`. Event 1 has a
 null `previous_event_hash`. Every later event carries the prior event hash. Compute
@@ -141,15 +168,21 @@ The chain detects deletion, insertion, reordering, duplication, and cross-stream
 splicing when a trusted checkpoint is retained separately. It does not prevent someone
 who controls both the stream and every checkpoint from rewriting all evidence.
 
+A chain alone cannot prove that its tail was included in an export. `AuditSnapshot`
+therefore binds the complete ordered event array to its count, first and last sequence,
+canonical digest, and terminal event hash. Verify all five before treating a bundle as
+complete.
+
 The stream records actor identity on every path, including validation rejection,
 notification, view, decision, expiry, refusal, unknown provider outcome, and
 reconciliation. It carries both `occurred_at` and `recorded_at`: event time answers
 what was true; ingestion time answers when the system learned it.
 
-Audit details contain hashes, reason codes, policy revision, timing, attempt number,
-and safe references. They never contain raw payloads, credentials, callback tokens,
-provider secrets, or unrestricted model transcripts. Classification and retention are
-explicit per event; deletion must also respect legal hold.
+Audit details and failure records contain hashes, bounded reason classes, redacted safe
+detail, policy revision, timing, attempt number, and safe references. They never contain
+raw payloads, credentials, callback tokens, provider secrets, or unrestricted model
+transcripts. Classification and retention are explicit per event; deletion must also
+respect legal hold.
 
 ## Schema and semantic validation
 

@@ -1,0 +1,12 @@
+{
+  "schema_version": "2.0.0",
+  "snapshot_id": "audit_snapshot_2026-04-28_1df41000",
+  "stream_id": "stream_prop_b3f1a2c4",
+  "captured_at": "2026-04-28T09:14:35Z",
+  "complete": true,
+  "entry_count": 9,
+  "first_sequence": 1,
+  "last_sequence": 9,
+  "events_digest": "sha256:27253837cacdb33a98012c35b78232dc2d23a3f2e45b841dfb0cba2e1a0d7ec3",
+  "root_event_hash": "sha256:5c216057ee3bdf32ea3711f6282dd7f261676e221c8bf8898d387b233682c8fe"
+}

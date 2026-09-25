@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v1.0.0/schemas/approval-record.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.0.0/schemas/approval-record.schema.json",
   "title": "ApprovalRecord",
   "description": "An append-only terminal decision bound to the exact effective action and payload reviewed by the approver.",
   "type": "object",
@@ -9,8 +9,11 @@
     "approval_id",
     "request_id",
     "proposal_id",
+    "request_revision",
     "action_hash",
     "payload_hash",
+    "review_snapshot_id",
+    "review_content_hash",
     "decision",
     "decided_by",
     "decided_at",
@@ -23,8 +26,11 @@
     "approval_id": {"$ref": "common.schema.json#/$defs/identifier"},
     "request_id": {"$ref": "common.schema.json#/$defs/identifier"},
     "proposal_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "request_revision": {"type": "integer", "minimum": 1},
     "action_hash": {"$ref": "common.schema.json#/$defs/digest"},
     "payload_hash": {"$ref": "common.schema.json#/$defs/digest"},
+    "review_snapshot_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "review_content_hash": {"$ref": "common.schema.json#/$defs/digest"},
     "decision": {
       "type": "string",
       "enum": ["approved", "rejected", "expired", "cancelled", "auto_approved", "failed"]

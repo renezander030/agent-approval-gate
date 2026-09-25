@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.0.0/schemas/resolution-record.schema.json",
+  "title": "ResolutionRecord",
+  "description": "A durable agent-facing receipt for an approval decision. Recording the decision and delivering it are separate facts, so a failed resume can be retried without reopening approval or execution.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "resolution_id",
+    "approval_id",
+    "request_id",
+    "proposal_id",
+    "call_id",
+    "action_hash",
+    "approval_record_hash",
+    "decision",
+    "terminal",
+    "disposition",
+    "retry_policy",
+    "emitted_at",
+    "delivery"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schema_version"},
+    "resolution_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "approval_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "request_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "proposal_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "call_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "action_hash": {"$ref": "common.schema.json#/$defs/digest"},
+    "approval_record_hash": {"$ref": "common.schema.json#/$defs/digest"},
+    "decision": {
+      "type": "string",
+      "enum": ["approved", "rejected", "expired", "cancelled", "auto_approved", "failed"]
+    },
+    "terminal": {"const": true},
+    "disposition": {
+      "type": "string",
+      "enum": ["execute_once", "do_not_execute", "revise_and_resubmit", "no_action"]
+    },
+    "retry_policy": {"type": "string", "enum": ["delivery_only", "new_proposal", "never"]},
+    "emitted_at": {"type": "string", "format": "date-time"},
+    "delivery": {
+      "type": "object",
+      "required": ["target_hash", "attempt", "status", "last_attempt_at"],
+      "additionalProperties": false,
+      "properties": {
+        "target_hash": {"$ref": "common.schema.json#/$defs/digest"},
+        "attempt": {"type": "integer", "minimum": 1, "maximum": 100},
+        "status": {"type": "string", "enum": ["pending", "delivered", "acknowledged", "failed"]},
+        "last_attempt_at": {"type": "string", "format": "date-time"},
+        "acknowledged_at": {"type": "string", "format": "date-time"},
+        "failure": {"$ref": "common.schema.json#/$defs/failure"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "acknowledged"}}, "required": ["status"]},
+          "then": {
+            "required": ["acknowledged_at"],
+            "not": {"required": ["failure"]}
+          }
+        },
+        {
+          "if": {"properties": {"status": {"const": "failed"}}, "required": ["status"]},
+          "then": {
+            "required": ["failure"],
+            "not": {"required": ["acknowledged_at"]}
+          }
+        },
+        {
+          "if": {
+            "properties": {"status": {"enum": ["pending", "delivered"]}},
+            "required": ["status"]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {"required": ["acknowledged_at"]},
+                {"required": ["failure"]}
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"decision": {"enum": ["approved", "auto_approved"]}}, "required": ["decision"]},
+      "then": {
+        "properties": {
+          "disposition": {"const": "execute_once"},
+          "retry_policy": {"const": "delivery_only"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"decision": {"enum": ["rejected", "expired", "cancelled"]}}, "required": ["decision"]},
+      "then": {
+        "properties": {
+          "disposition": {"enum": ["do_not_execute", "revise_and_resubmit"]},
+          "retry_policy": {"enum": ["new_proposal", "never"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"decision": {"const": "failed"}}, "required": ["decision"]},
+      "then": {
+        "properties": {
+          "disposition": {"const": "no_action"},
+          "retry_policy": {"const": "never"}
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.0.0/schemas/audit-snapshot.schema.json",
+  "title": "AuditSnapshot",
+  "description": "A completeness manifest that binds one exported audit-event set to its stream, sequence bounds, entry count, canonical digest, and terminal chain hash.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "stream_id",
+    "captured_at",
+    "complete",
+    "entry_count",
+    "first_sequence",
+    "last_sequence",
+    "events_digest",
+    "root_event_hash"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schema_version"},
+    "snapshot_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "stream_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "complete": {"const": true},
+    "entry_count": {"type": "integer", "minimum": 1, "maximum": 1000000},
+    "first_sequence": {"type": "integer", "minimum": 1},
+    "last_sequence": {"type": "integer", "minimum": 1},
+    "events_digest": {"$ref": "common.schema.json#/$defs/digest"},
+    "root_event_hash": {"$ref": "common.schema.json#/$defs/digest"},
+    "checkpoint": {"$ref": "common.schema.json#/$defs/evidence_reference"}
+  }
+}

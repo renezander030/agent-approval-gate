@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.0.0/schemas/authority-snapshot.schema.json",
+  "title": "AuthoritySnapshot",
+  "description": "A dispatch-time snapshot proving that the approver, policy, workspace, and dispatcher authorities remain active after approval and before provider invocation.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "authority_snapshot_id",
+    "proposal_id",
+    "request_id",
+    "action_hash",
+    "checked_at",
+    "status",
+    "authority_digest",
+    "subjects"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schema_version"},
+    "authority_snapshot_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "proposal_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "request_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "action_hash": {"$ref": "common.schema.json#/$defs/digest"},
+    "checked_at": {"type": "string", "format": "date-time"},
+    "valid_until": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "enum": ["active", "revoked", "unknown"]},
+    "authority_digest": {"$ref": "common.schema.json#/$defs/digest"},
+    "subjects": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "required": ["kind", "identifier", "revision", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {"type": "string", "enum": ["approver", "policy", "workspace", "dispatcher"]},
+          "identifier": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 256},
+          "revision": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 128},
+          "status": {"type": "string", "enum": ["active", "revoked", "unknown"]},
+          "scopes": {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 64,
+            "items": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 256}
+          },
+          "evidence": {"$ref": "common.schema.json#/$defs/evidence_reference"}
+        }
+      }
+    },
+    "failure": {"$ref": "common.schema.json#/$defs/failure"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "active"}}, "required": ["status"]},
+      "then": {"not": {"required": ["failure"]}}
+    },
+    {
+      "if": {"properties": {"status": {"enum": ["revoked", "unknown"]}}, "required": ["status"]},
+      "then": {"required": ["failure"]}
+    }
+  ]
+}
