@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v1.0.0/schemas/common.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.0.0/schemas/common.schema.json",
   "title": "Agent Approval Gate common definitions",
   "$defs": {
     "schema_version": {
       "type": "string",
-      "const": "1.0.0"
+      "const": "2.0.0"
     },
     "identifier": {
       "type": "string",
@@ -14,6 +14,24 @@
     "digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "safe_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000,
+      "pattern": "^[^\\u0000-\\u001F\\u007F\\u202A-\\u202E\\u2066-\\u2069]*$"
+    },
+    "agent_identity": {
+      "type": "object",
+      "required": ["identity", "name", "version", "run_id"],
+      "additionalProperties": false,
+      "properties": {
+        "identity": {"$ref": "#/$defs/identifier"},
+        "name": {"$ref": "#/$defs/safe_text", "maxLength": 64},
+        "version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,31}$"},
+        "model": {"$ref": "#/$defs/safe_text", "maxLength": 128},
+        "run_id": {"$ref": "#/$defs/identifier"}
+      }
     },
     "actor": {
       "type": "object",
@@ -24,12 +42,12 @@
           "type": "string",
           "enum": ["human", "policy", "system", "probe"]
         },
-        "identifier": {"type": "string", "minLength": 1, "maxLength": 128},
-        "display_name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "identifier": {"$ref": "#/$defs/safe_text", "maxLength": 128},
+        "display_name": {"$ref": "#/$defs/safe_text", "maxLength": 128},
         "roles": {
           "type": "array",
           "uniqueItems": true,
-          "items": {"type": "string", "minLength": 1, "maxLength": 64}
+          "items": {"$ref": "#/$defs/safe_text", "maxLength": 64}
         },
         "authentication": {
           "type": "object",
@@ -68,6 +86,48 @@
         "value": {"type": "string", "pattern": "^[A-Za-z0-9_-]{32,}$"}
       }
     },
+    "failure": {
+      "type": "object",
+      "required": ["class", "code", "retryable"],
+      "additionalProperties": false,
+      "properties": {
+        "class": {
+          "type": "string",
+          "enum": [
+            "security_refusal",
+            "validation_failure",
+            "authorization_failure",
+            "conflict",
+            "transient",
+            "unavailable",
+            "provider_failure",
+            "unknown"
+          ]
+        },
+        "code": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{2,127}$"},
+        "retryable": {"type": "boolean"},
+        "evidence": {"$ref": "#/$defs/evidence_reference"},
+        "safe_detail": {"$ref": "#/$defs/safe_text"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "security_refusal",
+                  "validation_failure",
+                  "authorization_failure",
+                  "conflict"
+                ]
+              }
+            },
+            "required": ["class"]
+          },
+          "then": {"properties": {"retryable": {"const": false}}}
+        }
+      ]
+    },
     "action_patch_operation": {
       "type": "object",
       "required": ["op", "path"],
@@ -102,7 +162,7 @@
         },
         "uri": {"type": "string", "format": "uri", "maxLength": 2048},
         "digest": {"$ref": "#/$defs/digest"},
-        "label": {"type": "string", "maxLength": 128}
+        "label": {"$ref": "#/$defs/safe_text", "maxLength": 128}
       }
     }
   }

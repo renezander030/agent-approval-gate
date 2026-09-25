@@ -1,0 +1,43 @@
+{
+  "profile": "RFC 8785 JSON Canonicalization Scheme encoded as UTF-8, then SHA-256",
+  "vectors": [
+    {
+      "name": "object key order is recursive",
+      "value": {"z": 0, "a": 1, "nested": {"b": 2, "a": 1}},
+      "canonical_hex": "7b2261223a312c226e6573746564223a7b2261223a312c2262223a327d2c227a223a307d",
+      "digest": "sha256:de6d5837bffbabc0142195f05912acbede00bea67f857e37633d8da8281bd9ba"
+    },
+    {
+      "name": "unicode is UTF-8 and controls use JSON escapes",
+      "value": {"emoji": "😀", "text": "café", "line": " ", "control": "\b\t\n\f\r"},
+      "canonical_hex": "7b22636f6e74726f6c223a225c625c745c6e5c665c72222c22656d6f6a69223a22f09f9880222c226c696e65223a22e280a8222c2274657874223a22636166c3a9227d",
+      "digest": "sha256:8826bfc7e438f7944b1f1c3634ed38249135941b245674ea4c3872b47c7ab73b"
+    },
+    {
+      "name": "ECMAScript number rendering and safe integer ceiling",
+      "value": {"float": 1.0, "negative_zero": -0.0, "small": 1e-7, "large": 9007199254740991},
+      "canonical_hex": "7b22666c6f6174223a312c226c61726765223a393030373139393235343734303939312c226e656761746976655f7a65726f223a302c22736d616c6c223a31652d377d",
+      "digest": "sha256:88fb22e5c9574c9519e4415f60b5e5f47fee082d5d04f7169d6531961a3919ab"
+    },
+    {
+      "name": "property names use UTF-16 sort order",
+      "value": {"😀": "astral", "�": "replacement", "a": "ascii"},
+      "canonical_hex": "7b2261223a226173636969222c22f09f9880223a2261737472616c222c22efbfbd223a227265706c6163656d656e74227d",
+      "digest": "sha256:e5708d7be17c059a4cd2dcd92ede9da2c3ec89d68e1c7bbcefa6a4fdf3912228"
+    },
+    {
+      "name": "timestamp strings are not normalized by canonicalization",
+      "value": {"utc": "2026-09-25T00:00:00Z", "offset": "2026-09-25T02:00:00+02:00"},
+      "canonical_hex": "7b226f6666736574223a22323032362d30392d32355430323a30303a30302b30323a3030222c22757463223a22323032362d30392d32355430303a30303a30305a227d",
+      "digest": "sha256:71a2b2e434f1b8e0e2a4c5e4d2b4d8a3d08a8718a8cdb14ff7c44b233aa32625"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "integer above the interoperable IEEE-754 range",
+      "value": 9007199254740992,
+      "expect": "reject",
+      "reason": "outside_interoperable_ieee754_integer_domain"
+    }
+  ]
+}

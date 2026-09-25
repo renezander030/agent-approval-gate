@@ -11,6 +11,16 @@
       "instance": "examples/approval-policy.json"
     },
     {
+      "name": "pre-admission validation record",
+      "schema": "schemas/validation-record.schema.json",
+      "instance": "examples/validation-record.json"
+    },
+    {
+      "name": "bound review snapshot",
+      "schema": "schemas/review-snapshot.schema.json",
+      "instance": "examples/review-snapshot.json"
+    },
+    {
       "name": "consumed approval request",
       "schema": "schemas/approval-request.schema.json",
       "instance": "examples/approval-request.json"
@@ -31,10 +41,25 @@
       "instance": "examples/dispatch-record.json"
     },
     {
+      "name": "durable approval resolution",
+      "schema": "schemas/resolution-record.schema.json",
+      "instance": "examples/resolution-record.json"
+    },
+    {
+      "name": "dispatch authority snapshot",
+      "schema": "schemas/authority-snapshot.schema.json",
+      "instance": "examples/authority-snapshot.json"
+    },
+    {
       "name": "audit stream events",
       "schema": "schemas/audit-event.schema.json",
       "instance": "examples/audit-events.json",
       "items": true
+    },
+    {
+      "name": "complete audit snapshot manifest",
+      "schema": "schemas/audit-snapshot.schema.json",
+      "instance": "examples/audit-snapshot.json"
     },
     {
       "name": "complete approval envelope",
@@ -210,6 +235,156 @@
       "expect": "semantic",
       "operations": [
         {"op": "replace", "path": "/dispatches/0/attempt", "value": 4}
+      ]
+    },
+    {
+      "name": "delegation identity rejects bidi controls",
+      "schema": "schemas/proposed-action.schema.json",
+      "instance": "examples/email-reply-approval.json",
+      "expect": "schema",
+      "operations": [
+        {"op": "replace", "path": "/agent/identity", "value": "agent.safe‮evil"}
+      ]
+    },
+    {
+      "name": "delegation call ids cannot be reused",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {
+          "op": "add",
+          "path": "/proposal/delegation_chain/-",
+          "value": {
+            "agent": {
+              "identity": "agent.support-triage.prod",
+              "name": "support-triage-agent",
+              "version": "1.4.2",
+              "model": "claude-opus-4-7",
+              "run_id": "run_2026-04-28_5f9e2c00"
+            },
+            "call_id": "call_2026-04-28_7e19c5ad",
+            "parent_call_id": "call_2026-04-28_7e19c5ad",
+            "delegated_at": "2026-04-28T09:14:23Z"
+          }
+        }
+      ]
+    },
+    {
+      "name": "review snapshot cannot omit effective arguments",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/review_snapshots/0/content/arguments/body_text",
+          "value": "Different content that the approver did not authorize."
+        }
+      ]
+    },
+    {
+      "name": "approval must bind the rendered review content",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/approvals/0/review_content_hash",
+          "value": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+        }
+      ]
+    },
+    {
+      "name": "request cannot cite rejected pre-admission validation",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {"op": "replace", "path": "/validations/0/outcome", "value": "rejected"},
+        {
+          "op": "add",
+          "path": "/validations/0/failure",
+          "value": {
+            "class": "security_refusal",
+            "code": "policy.prompt_injection",
+            "retryable": false,
+            "safe_detail": "Action refused before approval notification."
+          }
+        }
+      ]
+    },
+    {
+      "name": "validation failures cannot carry raw rejected payloads",
+      "schema": "schemas/validation-record.schema.json",
+      "instance": "examples/validation-record.json",
+      "expect": "schema",
+      "operations": [
+        {"op": "replace", "path": "/outcome", "value": "rejected"},
+        {
+          "op": "add",
+          "path": "/failure",
+          "value": {
+            "class": "validation_failure",
+            "code": "payload.invalid",
+            "retryable": false,
+            "raw_payload": "secret-token-value"
+          }
+        }
+      ]
+    },
+    {
+      "name": "requester cannot approve its own action",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/approvals/0/decided_by/identifier",
+          "value": "approval-router"
+        }
+      ]
+    },
+    {
+      "name": "revoked authority cannot reach dispatch",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {"op": "replace", "path": "/authority_snapshots/0/status", "value": "revoked"},
+        {
+          "op": "add",
+          "path": "/authority_snapshots/0/failure",
+          "value": {
+            "class": "authorization_failure",
+            "code": "authority.revoked",
+            "retryable": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "resolution receipt must bind the approval record",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/resolutions/0/approval_record_hash",
+          "value": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+        }
+      ]
+    },
+    {
+      "name": "audit snapshot cannot undercount exported events",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {"op": "replace", "path": "/audit_snapshot/entry_count", "value": 2}
       ]
     }
   ]

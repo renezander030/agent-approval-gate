@@ -1,0 +1,116 @@
+{
+  "profile": "Adversarial review, identity, metadata, and redaction inputs",
+  "positive": [],
+  "negative": [
+    {
+      "name": "approver display names reject embedded line breaks",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/approvals/0/decided_by/display_name",
+          "value": "Rene Z.\nSystem administrator"
+        }
+      ]
+    },
+    {
+      "name": "approver identities reject bidi overrides",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/approvals/0/decided_by/identifier",
+          "value": "rene@example.com‮moc.live@nimda"
+        }
+      ]
+    },
+    {
+      "name": "audit metadata keys reject bidi overrides",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "add",
+          "path": "/audit_events/0/detail/metadata",
+          "value": {"safe‮nekot_ipa": "redacted"}
+        }
+      ]
+    },
+    {
+      "name": "audit metadata values reject log injection controls",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "add",
+          "path": "/audit_events/0/detail/metadata",
+          "value": {"result": "accepted\nclassification=public"}
+        }
+      ]
+    },
+    {
+      "name": "failure objects reject raw payload material",
+      "schema": "schemas/validation-record.schema.json",
+      "instance": "examples/validation-record.json",
+      "expect": "schema",
+      "operations": [
+        {"op": "replace", "path": "/outcome", "value": "rejected"},
+        {
+          "op": "add",
+          "path": "/failure",
+          "value": {
+            "class": "validation_failure",
+            "code": "payload.invalid",
+            "retryable": false,
+            "raw_payload": "authorization: bearer secret"
+          }
+        }
+      ]
+    },
+    {
+      "name": "review arguments cannot be changed behind a valid action hash",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/review_snapshots/0/content/arguments/to/0",
+          "value": "attacker@example.net"
+        }
+      ]
+    },
+    {
+      "name": "approval cannot cite a forged review content hash",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/approvals/0/review_content_hash",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    },
+    {
+      "name": "validation check names cannot be duplicated to hide an omission",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/validations/0/checks/4/name",
+          "value": "policy_inputs"
+        }
+      ]
+    }
+  ]
+}

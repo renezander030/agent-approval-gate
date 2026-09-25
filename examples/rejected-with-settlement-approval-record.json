@@ -1,10 +1,13 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "2.0.0",
   "approval_id": "approval_2026-04-28_0e1bb000",
   "request_id": "req_2026-04-28_91cc7000",
   "proposal_id": "prop_2026-04-28_9d7e0f13",
+  "request_revision": 1,
   "action_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
   "payload_hash": "sha256:4d2f6b7c1e08a35d9f0c2b84e7a15d63c8e94f207b1a6d3e5c0f8927ab4361de",
+  "review_snapshot_id": "review_2026-04-28_9d7e0f13",
+  "review_content_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "decision": "rejected",
   "decided_by": {
     "kind": "human",

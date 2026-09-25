@@ -1,0 +1,22 @@
+{
+  "schema_version": "2.0.0",
+  "resolution_id": "resolution_2026-04-28_78ac1000",
+  "approval_id": "approval_2026-04-28_f9821000",
+  "request_id": "req_2026-04-28_6a2d8800",
+  "proposal_id": "prop_2026-04-28_b3f1a2c4",
+  "call_id": "call_2026-04-28_7e19c5ad",
+  "action_hash": "sha256:5a55a6cd79b06fd551ffbf941068f2f96c2fb735235d91cfd55cbd79a2766499",
+  "approval_record_hash": "sha256:2831f99f6ed2c0053782c18f920317c37a126dc6a285fda1bd18b2b79149c6b2",
+  "decision": "approved",
+  "terminal": true,
+  "disposition": "execute_once",
+  "retry_policy": "delivery_only",
+  "emitted_at": "2026-04-28T09:14:32Z",
+  "delivery": {
+    "target_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "attempt": 1,
+    "status": "acknowledged",
+    "last_attempt_at": "2026-04-28T09:14:32Z",
+    "acknowledged_at": "2026-04-28T09:14:32Z"
+  }
+}

@@ -1,11 +1,11 @@
 [
   {
-    "schema_version": "1.0.0",
+    "schema_version": "2.0.0",
     "event_id": "event_2026-04-28_00000001",
     "stream_id": "stream_prop_b3f1a2c4",
     "sequence": 1,
     "previous_event_hash": null,
-    "event_hash": "sha256:8c13fc78697e3c8793e0edf5631b661679dd2b71e19cfe6c920f5fe9fd97feeb",
+    "event_hash": "sha256:6ec1ae5c421c1e21f5003fe9f387a3d8a8efbb3261fbd6c99d6f08f8f626e0d5",
     "event_type": "proposal.received",
     "occurred_at": "2026-04-28T09:14:23Z",
     "recorded_at": "2026-04-28T09:14:24Z",
@@ -29,16 +29,127 @@
     },
     "references": {},
     "detail": {
-      "action_hash": "sha256:63629bc7b5a40274312d706fb0f8537a284c49bffaacc840760b32543a856770"
+      "action_hash": "sha256:5a55a6cd79b06fd551ffbf941068f2f96c2fb735235d91cfd55cbd79a2766499"
     }
   },
   {
-    "schema_version": "1.0.0",
+    "schema_version": "2.0.0",
     "event_id": "event_2026-04-28_00000002",
     "stream_id": "stream_prop_b3f1a2c4",
     "sequence": 2,
-    "previous_event_hash": "sha256:8c13fc78697e3c8793e0edf5631b661679dd2b71e19cfe6c920f5fe9fd97feeb",
-    "event_hash": "sha256:b18dc2ab96ff04789c88adcac48995548850c3c62c46aca638cbcb28253ed876",
+    "previous_event_hash": "sha256:6ec1ae5c421c1e21f5003fe9f387a3d8a8efbb3261fbd6c99d6f08f8f626e0d5",
+    "event_hash": "sha256:b6a235ac6824dae729b194512a28dc7192bfd056c28435f980597b383585ca6f",
+    "event_type": "validation.passed",
+    "occurred_at": "2026-04-28T09:14:24Z",
+    "recorded_at": "2026-04-28T09:14:24Z",
+    "tenant": "acme-corp",
+    "proposal_id": "prop_2026-04-28_b3f1a2c4",
+    "actor": {
+      "kind": "system",
+      "identifier": "approval-validator",
+      "authentication": {
+        "method": "service_identity",
+        "human_present": false,
+        "assurance": "high",
+        "authenticated_at": "2026-04-28T09:14:24Z"
+      }
+    },
+    "classification": "confidential",
+    "retention": {
+      "class": "standard",
+      "delete_after": "2027-04-28T09:14:24Z",
+      "legal_hold": false
+    },
+    "references": {
+      "validation_id": "validation_2026-04-28_841ac000"
+    },
+    "detail": {
+      "action_hash": "sha256:5a55a6cd79b06fd551ffbf941068f2f96c2fb735235d91cfd55cbd79a2766499"
+    }
+  },
+  {
+    "schema_version": "2.0.0",
+    "event_id": "event_2026-04-28_00000003",
+    "stream_id": "stream_prop_b3f1a2c4",
+    "sequence": 3,
+    "previous_event_hash": "sha256:b6a235ac6824dae729b194512a28dc7192bfd056c28435f980597b383585ca6f",
+    "event_hash": "sha256:8fb6c08d758dd027faac042764f9a484829e7fb867250e4bd14f2eb4bf2f02b3",
+    "event_type": "approval.requested",
+    "occurred_at": "2026-04-28T09:14:25Z",
+    "recorded_at": "2026-04-28T09:14:25Z",
+    "tenant": "acme-corp",
+    "proposal_id": "prop_2026-04-28_b3f1a2c4",
+    "actor": {
+      "kind": "system",
+      "identifier": "approval-router",
+      "authentication": {
+        "method": "service_identity",
+        "human_present": false,
+        "assurance": "high",
+        "authenticated_at": "2026-04-28T09:14:25Z"
+      }
+    },
+    "classification": "confidential",
+    "retention": {
+      "class": "standard",
+      "delete_after": "2027-04-28T09:14:25Z",
+      "legal_hold": false
+    },
+    "references": {
+      "request_id": "req_2026-04-28_6a2d8800",
+      "validation_id": "validation_2026-04-28_841ac000",
+      "policy_evaluation_id": "eval_2026-04-28_1c4f8a00"
+    },
+    "detail": {
+      "action_hash": "sha256:5a55a6cd79b06fd551ffbf941068f2f96c2fb735235d91cfd55cbd79a2766499",
+      "policy_revision": "2026-04-15.3"
+    }
+  },
+  {
+    "schema_version": "2.0.0",
+    "event_id": "event_2026-04-28_00000004",
+    "stream_id": "stream_prop_b3f1a2c4",
+    "sequence": 4,
+    "previous_event_hash": "sha256:8fb6c08d758dd027faac042764f9a484829e7fb867250e4bd14f2eb4bf2f02b3",
+    "event_hash": "sha256:43a2ad9532dbbde1ab76787576bd8d2a89c5e02c12d80da29fce943922055041",
+    "event_type": "review.presented",
+    "occurred_at": "2026-04-28T09:14:26Z",
+    "recorded_at": "2026-04-28T09:14:26Z",
+    "tenant": "acme-corp",
+    "proposal_id": "prop_2026-04-28_b3f1a2c4",
+    "actor": {
+      "kind": "system",
+      "identifier": "approval-email-renderer",
+      "authentication": {
+        "method": "service_identity",
+        "human_present": false,
+        "assurance": "high",
+        "authenticated_at": "2026-04-28T09:14:26Z"
+      }
+    },
+    "classification": "confidential",
+    "retention": {
+      "class": "standard",
+      "delete_after": "2027-04-28T09:14:26Z",
+      "legal_hold": false
+    },
+    "references": {
+      "request_id": "req_2026-04-28_6a2d8800",
+      "review_snapshot_id": "review_2026-04-28_47b2c000"
+    },
+    "detail": {
+      "action_hash": "sha256:5a55a6cd79b06fd551ffbf941068f2f96c2fb735235d91cfd55cbd79a2766499",
+      "payload_hash": "sha256:c919182dcf3aa49d95f5927636aeb7a6a227fa9f9b3daa7384ac4c531a9f891b",
+      "review_content_hash": "sha256:1496a0bf99cb54f169a7deb5e57ec48be882f1859fbd39cc2014563d3a250636"
+    }
+  },
+  {
+    "schema_version": "2.0.0",
+    "event_id": "event_2026-04-28_00000005",
+    "stream_id": "stream_prop_b3f1a2c4",
+    "sequence": 5,
+    "previous_event_hash": "sha256:43a2ad9532dbbde1ab76787576bd8d2a89c5e02c12d80da29fce943922055041",
+    "event_hash": "sha256:54b3661315804f30979430ddfdefdac58dcf3c097c661412f2054a40b34f6029",
     "event_type": "approval.decided",
     "occurred_at": "2026-04-28T09:14:30Z",
     "recorded_at": "2026-04-28T09:14:31Z",
@@ -71,19 +182,94 @@
     "detail": {
       "decision": "approved",
       "channel": "email",
-      "action_hash": "sha256:63629bc7b5a40274312d706fb0f8537a284c49bffaacc840760b32543a856770",
+      "action_hash": "sha256:5a55a6cd79b06fd551ffbf941068f2f96c2fb735235d91cfd55cbd79a2766499",
       "payload_hash": "sha256:c919182dcf3aa49d95f5927636aeb7a6a227fa9f9b3daa7384ac4c531a9f891b",
       "policy_revision": "2026-04-15.3",
       "wait_ms": 7000
     }
   },
   {
-    "schema_version": "1.0.0",
-    "event_id": "event_2026-04-28_00000003",
+    "schema_version": "2.0.0",
+    "event_id": "event_2026-04-28_00000006",
     "stream_id": "stream_prop_b3f1a2c4",
-    "sequence": 3,
-    "previous_event_hash": "sha256:b18dc2ab96ff04789c88adcac48995548850c3c62c46aca638cbcb28253ed876",
-    "event_hash": "sha256:eff570164731e1600f3a32e67c5fb665ba452c20db14a935a91615edf0fb9d95",
+    "sequence": 6,
+    "previous_event_hash": "sha256:54b3661315804f30979430ddfdefdac58dcf3c097c661412f2054a40b34f6029",
+    "event_hash": "sha256:6c062b1f4c3865655ccfb1b536b817b6681fece0566ad5f2ebfd94a1cfd3b9d7",
+    "event_type": "resolution.emitted",
+    "occurred_at": "2026-04-28T09:14:32Z",
+    "recorded_at": "2026-04-28T09:14:32Z",
+    "tenant": "acme-corp",
+    "proposal_id": "prop_2026-04-28_b3f1a2c4",
+    "actor": {
+      "kind": "system",
+      "identifier": "approval-router",
+      "authentication": {
+        "method": "service_identity",
+        "human_present": false,
+        "assurance": "high",
+        "authenticated_at": "2026-04-28T09:14:32Z"
+      }
+    },
+    "classification": "confidential",
+    "retention": {
+      "class": "standard",
+      "delete_after": "2027-04-28T09:14:32Z",
+      "legal_hold": false
+    },
+    "references": {
+      "request_id": "req_2026-04-28_6a2d8800",
+      "approval_id": "approval_2026-04-28_f9821000",
+      "resolution_id": "resolution_2026-04-28_78ac1000"
+    },
+    "detail": {
+      "decision": "approved",
+      "action_hash": "sha256:5a55a6cd79b06fd551ffbf941068f2f96c2fb735235d91cfd55cbd79a2766499"
+    }
+  },
+  {
+    "schema_version": "2.0.0",
+    "event_id": "event_2026-04-28_00000007",
+    "stream_id": "stream_prop_b3f1a2c4",
+    "sequence": 7,
+    "previous_event_hash": "sha256:6c062b1f4c3865655ccfb1b536b817b6681fece0566ad5f2ebfd94a1cfd3b9d7",
+    "event_hash": "sha256:c1e8d7efb0c9bc8f7fe7dd0e80185b8d124a63a4196ad5e7f181b4c7c1549287",
+    "event_type": "authority.checked",
+    "occurred_at": "2026-04-28T09:14:33Z",
+    "recorded_at": "2026-04-28T09:14:33Z",
+    "tenant": "acme-corp",
+    "proposal_id": "prop_2026-04-28_b3f1a2c4",
+    "actor": {
+      "kind": "system",
+      "identifier": "approval-gate",
+      "authentication": {
+        "method": "service_identity",
+        "human_present": false,
+        "assurance": "high",
+        "authenticated_at": "2026-04-28T09:14:33Z"
+      }
+    },
+    "classification": "confidential",
+    "retention": {
+      "class": "standard",
+      "delete_after": "2027-04-28T09:14:33Z",
+      "legal_hold": false
+    },
+    "references": {
+      "request_id": "req_2026-04-28_6a2d8800",
+      "approval_id": "approval_2026-04-28_f9821000",
+      "authority_snapshot_id": "authority_2026-04-28_9bc31000"
+    },
+    "detail": {
+      "action_hash": "sha256:5a55a6cd79b06fd551ffbf941068f2f96c2fb735235d91cfd55cbd79a2766499"
+    }
+  },
+  {
+    "schema_version": "2.0.0",
+    "event_id": "event_2026-04-28_00000008",
+    "stream_id": "stream_prop_b3f1a2c4",
+    "sequence": 8,
+    "previous_event_hash": "sha256:c1e8d7efb0c9bc8f7fe7dd0e80185b8d124a63a4196ad5e7f181b4c7c1549287",
+    "event_hash": "sha256:6ee6bcac5dec400b10939739fbd4b86c2ac1923ba93d1723cb098658fa5e97d5",
     "event_type": "dispatch.succeeded",
     "occurred_at": "2026-04-28T09:14:34Z",
     "recorded_at": "2026-04-28T09:14:34Z",
@@ -111,9 +297,42 @@
       "dispatch_id": "dispatch_2026-04-28_4ad31000"
     },
     "detail": {
-      "action_hash": "sha256:63629bc7b5a40274312d706fb0f8537a284c49bffaacc840760b32543a856770",
+      "action_hash": "sha256:5a55a6cd79b06fd551ffbf941068f2f96c2fb735235d91cfd55cbd79a2766499",
       "attempt": 1,
       "provider_result_hash": "sha256:78b0436944885eb78c09ea1a657e2d2c57b0d9672a19f709e6724c22a633a29b"
     }
+  },
+  {
+    "schema_version": "2.0.0",
+    "event_id": "event_2026-04-28_00000009",
+    "stream_id": "stream_prop_b3f1a2c4",
+    "sequence": 9,
+    "previous_event_hash": "sha256:6ee6bcac5dec400b10939739fbd4b86c2ac1923ba93d1723cb098658fa5e97d5",
+    "event_hash": "sha256:5c216057ee3bdf32ea3711f6282dd7f261676e221c8bf8898d387b233682c8fe",
+    "event_type": "audit.snapshotted",
+    "occurred_at": "2026-04-28T09:14:35Z",
+    "recorded_at": "2026-04-28T09:14:35Z",
+    "tenant": "acme-corp",
+    "proposal_id": "prop_2026-04-28_b3f1a2c4",
+    "actor": {
+      "kind": "system",
+      "identifier": "approval-audit",
+      "authentication": {
+        "method": "service_identity",
+        "human_present": false,
+        "assurance": "high",
+        "authenticated_at": "2026-04-28T09:14:35Z"
+      }
+    },
+    "classification": "confidential",
+    "retention": {
+      "class": "standard",
+      "delete_after": "2027-04-28T09:14:35Z",
+      "legal_hold": false
+    },
+    "references": {
+      "audit_snapshot_id": "audit_snapshot_2026-04-28_1df41000"
+    },
+    "detail": {}
   }
 ]

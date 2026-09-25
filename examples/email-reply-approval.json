@@ -1,18 +1,32 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "2.0.0",
   "proposal_id": "prop_2026-04-28_b3f1a2c4",
   "call_id": "call_2026-04-28_7e19c5ad",
   "agent": {
+    "identity": "agent.support-triage.prod",
     "name": "support-triage-agent",
     "version": "1.4.2",
     "model": "claude-opus-4-7",
     "run_id": "run_2026-04-28_5f9e2c00"
   },
+  "delegation_chain": [
+    {
+      "agent": {
+        "identity": "agent.support-triage.prod",
+        "name": "support-triage-agent",
+        "version": "1.4.2",
+        "model": "claude-opus-4-7",
+        "run_id": "run_2026-04-28_5f9e2c00"
+      },
+      "call_id": "call_2026-04-28_7e19c5ad",
+      "delegated_at": "2026-04-28T09:14:23Z"
+    }
+  ],
   "action_type": "email.send",
   "payload_schema": {
-    "id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v1.0.0/schemas/actions/email.send.schema.json",
-    "version": "1.0.0",
-    "digest": "sha256:4db6aad49b73ce8039c5a1173a523f503e78402dc1b9d99836a3075cd13eabcb"
+    "id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.0.0/schemas/actions/email.send.schema.json",
+    "version": "2.0.0",
+    "digest": "sha256:d85fa44f9699b46afec60ff1cdef54f2ddb8889113d14dc1ab16b428fdcdd37d"
   },
   "payload": {
     "from": "support@acme-corp.example",

@@ -1,5 +1,51 @@
 # Changelog
 
+## 2.0.0
+
+This major release makes the approval lifecycle independently traceable from nested
+agent delegation through review, resolution delivery, dispatch-time authorization,
+and audit export. The new lifecycle records are required in a complete envelope.
+
+### Added
+
+- Stable agent identities and delegation chains that preserve parent and terminal
+  call provenance across nested handoffs and serialization.
+- Immutable pre-admission validation records covering proposal, payload, semantic,
+  policy-input, and authority-input checks.
+- Review snapshots that bind the complete arguments and exact decision material shown
+  to an approver to the action and payload hashes.
+- Policy-level separation-of-duties rules for requester, agent, eligible and excluded
+  approvers, and signing keys.
+- Durable terminal resolution receipts with delivery and acknowledgement tracked
+  separately from the approval decision.
+- Dispatch-time authority snapshots for the approver, policy, workspace, and
+  dispatcher, with revoked or unknown authority failing closed.
+- Audit snapshot manifests that prove event-set completeness with count, sequence
+  bounds, canonical digest, and terminal chain hash.
+- A language-neutral RFC 8785 corpus with exact UTF-8 bytes, SHA-256 digests,
+  Unicode, number, ordering, timestamp, and unsafe-integer cases.
+- Adversarial conformance vectors for bidirectional text, reused call identities,
+  altered review arguments, forged review hashes, rejected validation, unsafe failure
+  detail, self-approval, revoked authority, resolution tampering, and audit omission.
+
+### Changed
+
+- Complete approval envelopes now require validation, review, resolution, authority,
+  and audit snapshot records.
+- Approval requests and records bind the validation result, review snapshot, request
+  revision, and reviewed-content hash.
+- Dispatch records require the authority snapshot used immediately before invocation.
+- Failures use a bounded reason taxonomy and a redacted `safe_detail` field.
+- Schema IDs are pinned to the immutable `v2.0.0` release.
+
+### Migration
+
+Version 2 is intentionally not wire-compatible with version 1. Add stable agent and
+delegation identities, emit and retain each new lifecycle record, enforce the new
+cross-record bindings, and validate canonicalization with the release corpus before
+accepting or dispatching v2 documents. Continue validating stored v1 records with the
+v1.0.0 schemas; do not rewrite their version in place.
+
 ## 1.0.0
 
 The first versioned contract release turns the reference pattern into a portable,

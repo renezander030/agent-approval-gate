@@ -13,66 +13,98 @@ away from the agent.
 ## The pattern
 
 ```text
-AI Agent -> ProposedAction -> ApprovalRequest -> ApprovalRecord
-                                              |
-                                              v
+AI Agent -> ProposedAction -> ValidationRecord -> ReviewSnapshot
+                                                    |
+                                                    v
+                                ApprovalRequest -> ApprovalRecord
+                                                    |
+                                         ResolutionRecord
+                                                    |
+                                  dispatch-time authority check
+                                                    |
+                                                    v
                                       deterministic Dispatcher
-                                              |
-                                              v
-                          DispatchRecord + hash-chained audit events
+                                                    |
+                                                    v
+                         DispatchRecord + complete audit snapshot
 ```
 
-Five boundaries make the gate real:
+Nine boundaries make the gate real:
 
 1. **ProposedAction** serializes the complete action. Its RFC 8785 digest binds the
    action type, call identity, arguments, tenant, expiry, risk, and idempotency key.
-2. **ApprovalRequest** is durable, addressable state. A callback resolves one known,
+2. **Delegation provenance** preserves stable agent and nested call identities from
+   the root invocation through the terminal action.
+3. **ValidationRecord** attests that the exact action passed structural, payload,
+   semantic, policy-input, and authority-input checks before notification.
+4. **ReviewSnapshot** binds the complete arguments and other decision material shown
+   to the approver to the action and payload hashes.
+5. **ApprovalRequest** is durable, addressable state. A callback resolves one known,
    pending request and the approved request is consumed exactly once.
-3. **ApprovalRecord** names the actor and immutable policy revision and binds the
-   decision to the effective action and payload.
-4. **Dispatcher** is plain code. It presents the stable idempotency key to the provider
-   and records success, failure, or an explicitly unknown outcome before any retry.
-5. **Audit stream** is append-only, redacted, and hash-linked from proposal through
-   decision to the terminal dispatch result.
+6. **ApprovalRecord** names the actor, enforces separation of duties, and binds the
+   decision to the immutable policy revision and reviewed content.
+7. **ResolutionRecord** durably returns the terminal decision without reopening an
+   approval when delivery or agent resumption fails.
+8. **Dispatcher** revalidates current authority immediately before invocation, uses
+   the stable idempotency key, and preserves explicitly unknown outcomes.
+9. **Audit stream** is append-only, redacted, and hash-linked; its export manifest
+   proves the expected count, sequence bounds, event-set digest, and terminal hash.
 
 If the agent still has the side-effect credential, the approval path remains optional
 from the agent's point of view.
 
-## Contracts in v1.0.0
+## Contracts in v2.0.0
 
 | Contract | Purpose |
 |---|---|
 | [`proposed-action.schema.json`](schemas/proposed-action.schema.json) | Exact action draft, expiry, risk, payload schema, and idempotency identity |
+| [`validation-record.schema.json`](schemas/validation-record.schema.json) | Immutable pre-notification validation result for an exact action |
+| [`review-snapshot.schema.json`](schemas/review-snapshot.schema.json) | Exact decision material shown to the approver, bound by canonical hashes |
 | [`approval-policy.schema.json`](schemas/approval-policy.schema.json) | Immutable policy revision, material inputs, quorum, and channel requirements |
 | [`approval-request.schema.json`](schemas/approval-request.schema.json) | Durable pending identity, notifications, terminal state, and single-use consumption |
 | [`approval-record.schema.json`](schemas/approval-record.schema.json) | Human or policy decision, action and payload hashes, signatures, and settlement evidence |
+| [`resolution-record.schema.json`](schemas/resolution-record.schema.json) | Durable terminal receipt with independent delivery and acknowledgement state |
+| [`authority-snapshot.schema.json`](schemas/authority-snapshot.schema.json) | Dispatch-time authority status for approver, policy, workspace, and dispatcher |
 | [`dispatch-record.schema.json`](schemas/dispatch-record.schema.json) | Attempt ceiling, provider outcome, unknown-outcome handling, and reconciliation |
 | [`audit-event.schema.json`](schemas/audit-event.schema.json) | Redacted lifecycle evidence with actor, event time, ingestion time, and hash chain |
+| [`audit-snapshot.schema.json`](schemas/audit-snapshot.schema.json) | Completeness manifest for one exported audit-event set |
 | [`approval-envelope.schema.json`](schemas/approval-envelope.schema.json) | Portable bundle plus cross-contract profile for a completed lifecycle |
 | [`actions/email.send.schema.json`](schemas/actions/email.send.schema.json) | Strict reference for composing action-specific payload contracts |
 
-Schema IDs are pinned to the `v1.0.0` release. Pin a released ID in production; do not
+Schema IDs are pinned to the `v2.0.0` release. Pin a released ID in production; do not
 resolve schemas from the mutable default branch.
 
 ## Quick start
 
-1. Validate the incoming proposal against `proposed-action.schema.json` and its
-   action-specific payload schema.
+1. Validate the proposal and payload, record every required check in a passed
+   `ValidationRecord`, and refuse admission on any failed or missing check.
 2. Canonicalize the complete `ProposedAction` with RFC 8785 and store its SHA-256 as
    `action_hash` on the approval request.
-3. Persist the request before notifying any channel. Resolve callbacks only by the
-   pending `request_id`, expected revision, tenant, nonce, and action hash.
-4. Recompute the effective action after any JSON Patch modifications. Write one
-   append-only `ApprovalRecord` per approver.
-5. Atomically consume the approved request, then dispatch with the proposal's stable
-   `idempotency_key`. An unknown provider outcome goes to reconciliation, not retry.
-6. Append the lifecycle events. Never put raw payloads, credentials, callback tokens,
-   or provider secrets in the audit stream.
+3. Persist a `ReviewSnapshot` and request before notifying any channel. Resolve
+   callbacks only by the pending request revision, tenant, nonce, action hash, and
+   exact reviewed-content hash.
+4. Recompute the effective action after any JSON Patch modifications. Enforce the
+   policy's approver eligibility, exclusion, requester/agent separation, and signing
+   key rules before writing an append-only `ApprovalRecord`.
+5. Emit a durable `ResolutionRecord`; retry only its delivery when agent resumption
+   fails. Never repeat the decision or create a fresh execution grant.
+6. Atomically consume the approved request, revalidate current authority, then
+   dispatch with the stable `idempotency_key`. An unknown provider outcome goes to
+   reconciliation, not retry.
+7. Append the lifecycle events and export them with an `AuditSnapshot`. Never put raw
+   payloads, credentials, callback tokens, or provider secrets in failure or audit
+   details.
 
 The complete synthetic lifecycle is in
 [`examples/approval-envelope.json`](examples/approval-envelope.json). The validator
 checks IDs, hashes, quorum, expiry, sequence linkage, and attempt ceilings that JSON
 Schema alone cannot compare across documents.
+
+[`tests/canonicalization.json`](tests/canonicalization.json) is a language-neutral
+RFC 8785 corpus with exact canonical UTF-8 bytes and SHA-256 results. Use it to prove
+that implementations in different languages bind the same document to the same hash.
+[`tests/adversarial.json`](tests/adversarial.json) exercises deceptive identities,
+display controls, metadata injection, redaction boundaries, and review tampering.
 
 ```bash
 python3 -m venv .venv
@@ -85,9 +117,10 @@ python3 -m venv .venv
 
 [`examples/n8n-approval-workflow.json`](examples/n8n-approval-workflow.json) is an
 importable wait-and-resume reference. Unlike a notification-only workflow, it calls a
-real schema validator, persists the request before notification, accepts a signed
-callback, atomically consumes the approval, sends an idempotency key to the dispatcher,
-and records both success and refusal paths.
+real schema validator, persists validation and review evidence before notification,
+accepts a signed callback, durably delivers the resolution, revalidates authority,
+atomically consumes the approval, sends an idempotency key to the dispatcher, and
+exports a complete audit snapshot on both success and refusal paths.
 
 Configure these deployment-owned endpoints after import:
 
