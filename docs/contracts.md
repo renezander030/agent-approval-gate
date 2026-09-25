@@ -2,8 +2,8 @@
 
 ## Versioning
 
-The release version and every schema's `schema_version` are `2.0.0`. Schema `$id`
-values resolve through the immutable `v2.0.0` tag. A consumer may cache schemas by
+The release version and every schema's `schema_version` are `2.1.0`. Schema `$id`
+values resolve through the immutable `v2.1.0` tag. A consumer may cache schemas by
 `$id`; it must not replace a cached release schema with content from `main`.
 
 - Patch releases may clarify descriptions and add compatible examples or tests.
@@ -27,6 +27,7 @@ Use RFC 8785 JSON Canonicalization Scheme bytes and SHA-256. Encode digests as
 | effective `action_hash` | Complete proposal copy after approved JSON Patch operations |
 | `payload_hash` | Effective `payload` object |
 | `review_snapshot.content_hash` | Exact `content` object presented for decision |
+| `signature.signed_object_hash` | Complete `ApprovalRecord` with `signatures` omitted |
 | `authority_digest` | Ordered `subjects` array in the authority snapshot |
 | `approval_record_hash` | Complete approval record referenced by a resolution receipt |
 | `event_hash` | Complete audit event with `event_hash` omitted |
@@ -69,6 +70,47 @@ The envelope validator enforces the rules JSON Schema cannot express:
   the exported event array.
 
 Treat a semantic validation error as a hard refusal with a redacted audit reason.
+
+## WebAuthn approval proof
+
+`webauthn-es256` is an optional signature profile for authenticated web approvals.
+Compute the RFC 8785 canonical bytes of the complete `ApprovalRecord` with the
+`signatures` property omitted, hash them with SHA-256, and use the raw 32 digest bytes
+as the WebAuthn challenge. Store the same digest as `signed_object_hash`.
+
+The assertion retains the exact base64url-encoded `client_data_json`,
+`authenticator_data`, DER ES256 signature, SPKI DER P-256 public key, credential ID,
+RP ID, HTTPS origin, and current and previous counters. Verification must:
+
+1. recompute `signed_object_hash` and the base64url challenge;
+2. parse `clientDataJSON` without duplicate keys and require `webauthn.get`, the exact
+   challenge, the expected origin, and no cross-origin context;
+3. verify the RP ID hash, UP and UV flags, extension-free assertion profile, and
+   counter;
+4. verify the signature over `authenticatorData || SHA-256(clientDataJSON)`;
+5. resolve `registration_evidence` and confirm that the credential public key, actor,
+   RP ID, and prior counter match the independently retained registration.
+
+The registration evidence digest is the RFC 8785/SHA-256 digest of this binding
+manifest (with values copied from the approval):
+
+```json
+{
+  "actor": "person@example.com",
+  "credential_id": "base64url credential ID",
+  "credential_public_key": "base64url SPKI DER public key",
+  "previous_sign_count": 8,
+  "rp_id": "example.com"
+}
+```
+
+When the authenticator uses a signature counter, the referenced external evidence is
+a registration-and-state checkpoint rather than a static registration document.
+
+Steps 1–4 prove that the included key signed the exact approval artifact. Step 5 is
+what makes the result independently attributable instead of merely self-consistent.
+The repository validator performs steps 1–4 and validates the registration reference;
+production verifiers must resolve and authenticate the referenced evidence.
 
 ## Delegation and identity
 
@@ -142,6 +184,7 @@ outcomes, broken audit chains, quorum, and attempt ceilings.
 
 `tests/adversarial.json` separately covers bidi and control-character display input,
 metadata injection, raw failure payloads, duplicated validation claims, altered review
-arguments, and forged review hashes. `tests/canonicalization.json` is the
+arguments, forged review hashes, invalid WebAuthn binding, origin drift, counter
+rollback, and signature tampering. `tests/canonicalization.json` is the
 language-neutral byte-and-digest corpus. Together the files can drive validators in
 any implementation language.

@@ -18,6 +18,9 @@ The contracts defend six boundaries:
 
 They do not make a platform-held signature independently verifiable against the
 platform itself. Email and Telegram compatibility remains an explicit design choice.
+The optional WebAuthn profile can use an approver-held credential, but independent
+trust still requires credential-registration evidence retained outside the disputed
+platform.
 
 ## 1. ProposedAction: the agent drafts and stops
 
@@ -93,6 +96,31 @@ For signed channels, sign the RFC 8785 canonicalization of the ApprovalRecord wi
 `signatures` property omitted. The signed object therefore covers request and proposal
 identity, both hashes, actor, event and ingestion time, channel, policy evaluation,
 and modifications. `key_id` makes rotation explicit.
+
+### WebAuthn proof profile
+
+For an authenticated web approval, `webauthn-es256` uses the raw 32 bytes of the
+unsigned record's SHA-256 digest as the WebAuthn challenge. Preserve the browser's
+exact `clientDataJSON` and `authenticatorData`; the authenticator signs the latter
+concatenated with SHA-256 of the former. Verification follows the
+[WebAuthn Level 3 relying-party checks](https://www.w3.org/TR/webauthn-3/#sctn-verifying-assertion):
+
+- require `type: webauthn.get` and the exact approval challenge;
+- match the HTTPS origin and RP ID scope;
+- verify the RP ID hash plus user-presence and user-verification flags;
+- compare the signed counter with the stored prior counter when counters are used;
+- verify the ES256 signature with the registered P-256 credential public key.
+
+The contract carries that public key so a verifier can check the artifact offline and
+a digest-addressed registration reference so it can establish where the key came
+from. The proof is independent only when that registration evidence or its checkpoint
+is controlled outside the platform under dispute.
+
+WebAuthn itself does not display the action being signed. Render the exact bound
+`ReviewSnapshot` immediately before the browser ceremony and reject any changed
+snapshot, origin, challenge, or request revision. The assertion proves which record
+the credential signed, not what a platform-controlled browser actually drew on screen;
+trusted client presentation remains a deployment boundary.
 
 ### Actor invariants
 
@@ -198,7 +226,7 @@ each boundary, not invoke the repository's development script as a network servi
 
 | Channel | Trust | Latency | Notes |
 |---|---:|---:|---|
-| Authenticated web | High | Low | Best place for strong human-presence evidence |
+| Authenticated web | High | Low | Supports the optional WebAuthn proof profile |
 | Slack signed interaction | High | Low | Verify the platform signature and tenant |
 | Telegram | Medium | Very low | Sign high-risk records and bind callback nonce |
 | Email | Low | High | Sign high-risk records; resist forwarding and replay |
@@ -217,6 +245,7 @@ claim `human_present: true` unless the host can enforce that distinction.
 - ACL synchronization between source and destination systems. Surface the risk to the
   approver in deployment-specific review evidence; enforce it in the integration.
 - Third-party-verifiable proof when the platform holds the signing key.
+- A WebAuthn UI, credential-registration service, or trust-anchor store.
 - A framework, SDK, CLI, daemon, queue, hosted service, or MCP server.
 
 The rejection-settlement split was originally contributed from a separate action-safety

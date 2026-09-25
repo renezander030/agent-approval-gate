@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.0.0/schemas/approval-envelope.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.1.0/schemas/approval-envelope.schema.json",
   "title": "ApprovalEnvelope",
   "description": "A complete portable lifecycle bundle. JSON Schema checks structure; scripts/validate_contracts.py also checks cross-record identity, hashes, quorum, time, sequence, and attempt invariants.",
   "type": "object",

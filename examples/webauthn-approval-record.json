@@ -1,0 +1,57 @@
+{
+  "schema_version": "2.1.0",
+  "approval_id": "approval_2026-04-28_webauthn1",
+  "request_id": "req_2026-04-28_6a2d8800",
+  "proposal_id": "prop_2026-04-28_b3f1a2c4",
+  "request_revision": 1,
+  "action_hash": "sha256:e2e1a44e6cb6f86c61e1131d6cd2d63ccc5c1654a18d8744121b4387179491d3",
+  "payload_hash": "sha256:c919182dcf3aa49d95f5927636aeb7a6a227fa9f9b3daa7384ac4c531a9f891b",
+  "review_snapshot_id": "review_2026-04-28_47b2c000",
+  "review_content_hash": "sha256:1496a0bf99cb54f169a7deb5e57ec48be882f1859fbd39cc2014563d3a250636",
+  "decision": "approved",
+  "decided_by": {
+    "kind": "human",
+    "identifier": "rene@acme-corp.example",
+    "display_name": "Rene Z.",
+    "roles": [
+      "customer-support"
+    ],
+    "authentication": {
+      "method": "authenticated_session",
+      "human_present": true,
+      "assurance": "high",
+      "authenticated_at": "2026-04-28T09:14:30Z",
+      "evidence_ref": "webauthn-session:session_2026-04-28_6dc90a00"
+    }
+  },
+  "decided_at": "2026-04-28T09:14:30Z",
+  "recorded_at": "2026-04-28T09:14:31Z",
+  "channel": "web",
+  "comment": "Reviewed the bound action details and approved with a passkey.",
+  "signatures": [
+    {
+      "algorithm": "webauthn-es256",
+      "key_id": "0cjNOhrHb5fQyIDYaRY4Xl9alS_ZqMfUMhHTUOdwD44",
+      "value": "MEUCIQDCSBdWIFAr1ZoojL_hQp1zxhFP7KzeFgejdWv3oRszkQIgOyJG2MsQzBJ2bDAIbgDbgimNlXhK7npRs1SN9NorI2E",
+      "signed_object_hash": "sha256:dfe8c9788a260ada0e32ad5fa7b0dd224214cf2feee63f0d71cca4fb79a4adba",
+      "webauthn": {
+        "credential_id": "0cjNOhrHb5fQyIDYaRY4Xl9alS_ZqMfUMhHTUOdwD44",
+        "credential_public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEwTs5yuIWm75cZG8csjFhuwDbl58swFV1Dg9wMx7heTMY8zZXtOZpXSj0WgP5gICY76Nc8k3u39ELxbZlpWK8IA",
+        "public_key_format": "spki-der",
+        "authenticator_data": "Bh4i5kXWgfgyp3-i_7Tc6tPg1gtE80-ZMLP6GootWYQFAAAACQ",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiMy1qSmVJb21DdG9PTXExZnA3RGRJa0lVenlfdTVqOE5jY3lrLTNta3JibyIsIm9yaWdpbiI6Imh0dHBzOi8vYXBwcm92ZS5hY21lLWNvcnAuZXhhbXBsZSIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+        "rp_id": "acme-corp.example",
+        "origin": "https://approve.acme-corp.example",
+        "user_verification": "required",
+        "previous_sign_count": 8,
+        "sign_count": 9,
+        "registration_evidence": {
+          "kind": "webauthn_registration",
+          "uri": "urn:acme:webauthn-registration:rene:2026-04-01",
+          "digest": "sha256:e418276e56aaa3875a10b80dce662014d1d576704d0cbfff069c2c02583af160",
+          "label": "Independently retained credential registration"
+        }
+      }
+    }
+  ]
+}

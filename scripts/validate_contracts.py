@@ -4,14 +4,20 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import hashlib
 import json
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import rfc8785
+from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
@@ -28,6 +34,179 @@ def load(path: str | Path) -> Any:
 
 def digest(value: Any) -> str:
     return "sha256:" + hashlib.sha256(rfc8785.dumps(value)).hexdigest()
+
+
+def decode_base64url(value: str) -> bytes:
+    padding = "=" * (-len(value) % 4)
+    decoded = base64.b64decode(value + padding, altchars=b"-_", validate=True)
+    if encode_base64url(decoded) != value:
+        raise ValueError("non-canonical base64url encoding")
+    return decoded
+
+
+def encode_base64url(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
+
+
+def _object_without_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate JSON property: {key}")
+        value[key] = item
+    return value
+
+
+def webauthn_signature_errors(approval: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    unsigned_approval = {
+        key: value for key, value in approval.items() if key != "signatures"
+    }
+    signed_object_hash = digest(unsigned_approval)
+    signatures = approval.get("signatures", [])
+    webauthn_signatures = [
+        signature
+        for signature in signatures
+        if signature.get("algorithm") == "webauthn-es256"
+    ]
+    if webauthn_signatures:
+        if approval.get("channel") != "web":
+            errors.append("WebAuthn approval must use the web channel")
+        actor = approval.get("decided_by", {})
+        authentication = actor.get("authentication", {})
+        if actor.get("kind") != "human" or not authentication.get("human_present"):
+            errors.append("WebAuthn approval must identify a present human")
+        if authentication.get("method") != "authenticated_session":
+            errors.append("WebAuthn approval must come from an authenticated session")
+
+    for signature in webauthn_signatures:
+        key_id = signature["key_id"]
+        assertion = signature["webauthn"]
+        prefix = f"WebAuthn signature {key_id}"
+        if signature["signed_object_hash"] != signed_object_hash:
+            errors.append(f"{prefix} does not bind the unsigned approval record")
+        if key_id != assertion["credential_id"]:
+            errors.append(f"{prefix} key_id does not match credential_id")
+
+        registration_binding = {
+            "credential_id": assertion["credential_id"],
+            "credential_public_key": assertion["credential_public_key"],
+            "rp_id": assertion["rp_id"],
+            "actor": approval.get("decided_by", {}).get("identifier"),
+            "previous_sign_count": assertion["previous_sign_count"],
+        }
+        if assertion["registration_evidence"]["digest"] != digest(
+            registration_binding
+        ):
+            errors.append(
+                f"{prefix} registration evidence does not bind the credential"
+            )
+
+        try:
+            client_data_json = decode_base64url(assertion["client_data_json"])
+            authenticator_data = decode_base64url(assertion["authenticator_data"])
+            public_key_der = decode_base64url(assertion["credential_public_key"])
+            signature_value = decode_base64url(signature["value"])
+        except (binascii.Error, ValueError, TypeError) as error:
+            errors.append(f"{prefix} contains invalid base64url: {error}")
+            continue
+
+        try:
+            client_data = json.loads(
+                client_data_json.decode("utf-8"),
+                object_pairs_hook=_object_without_duplicate_keys,
+            )
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+            errors.append(f"{prefix} contains invalid clientDataJSON: {error}")
+            continue
+        if not isinstance(client_data, dict):
+            errors.append(f"{prefix} clientDataJSON is not an object")
+            continue
+
+        expected_challenge = encode_base64url(
+            bytes.fromhex(signed_object_hash.removeprefix("sha256:"))
+        )
+        if client_data.get("type") != "webauthn.get":
+            errors.append(f"{prefix} clientDataJSON has the wrong type")
+        if client_data.get("challenge") != expected_challenge:
+            errors.append(f"{prefix} challenge does not bind the approval record")
+        if client_data.get("origin") != assertion["origin"]:
+            errors.append(f"{prefix} clientDataJSON origin mismatch")
+        if client_data.get("crossOrigin", False) is not False:
+            errors.append(f"{prefix} cross-origin assertion is not allowed")
+        if "topOrigin" in client_data:
+            errors.append(f"{prefix} topOrigin is not allowed by this profile")
+
+        try:
+            origin = urlparse(assertion["origin"])
+            origin_host = (origin.hostname or "").rstrip(".").lower()
+            _ = origin.port
+        except ValueError as error:
+            errors.append(f"{prefix} origin is invalid: {error}")
+            origin = None
+            origin_host = ""
+        rp_id = assertion["rp_id"].rstrip(".").lower()
+        if origin is None or origin.scheme != "https" or not origin_host:
+            errors.append(f"{prefix} origin must be an HTTPS origin")
+        elif (
+            origin.path
+            or origin.params
+            or origin.query
+            or origin.fragment
+            or origin.username
+            or origin.password
+        ):
+            errors.append(f"{prefix} origin must not contain extra URL components")
+        if origin_host != rp_id and not origin_host.endswith("." + rp_id):
+            errors.append(f"{prefix} origin is outside the RP ID scope")
+
+        if len(authenticator_data) < 37:
+            errors.append(f"{prefix} authenticator data is shorter than 37 bytes")
+            continue
+        if len(authenticator_data) != 37:
+            errors.append(
+                f"{prefix} authenticator data contains unsupported extension data"
+            )
+        if authenticator_data[:32] != hashlib.sha256(rp_id.encode("utf-8")).digest():
+            errors.append(f"{prefix} RP ID hash mismatch")
+        flags = authenticator_data[32]
+        if not flags & 0x01:
+            errors.append(f"{prefix} lacks the user-presence flag")
+        if not flags & 0x04:
+            errors.append(f"{prefix} lacks the user-verification flag")
+        if flags & 0x40:
+            errors.append(f"{prefix} assertion unexpectedly contains attested data")
+        if flags & 0x80:
+            errors.append(f"{prefix} assertion extensions are not supported")
+        if flags & 0x22:
+            errors.append(f"{prefix} sets a reserved authenticator flag")
+        if flags & 0x10 and not flags & 0x08:
+            errors.append(f"{prefix} backup state is set without backup eligibility")
+        parsed_sign_count = int.from_bytes(authenticator_data[33:37], "big")
+        if parsed_sign_count != assertion["sign_count"]:
+            errors.append(f"{prefix} sign_count does not match authenticator data")
+        previous_sign_count = assertion["previous_sign_count"]
+        if parsed_sign_count or previous_sign_count:
+            if parsed_sign_count <= previous_sign_count:
+                errors.append(f"{prefix} sign counter did not advance")
+
+        try:
+            public_key = serialization.load_der_public_key(public_key_der)
+            if not isinstance(public_key, ec.EllipticCurvePublicKey):
+                errors.append(f"{prefix} public key is not an EC key")
+                continue
+            if not isinstance(public_key.curve, ec.SECP256R1):
+                errors.append(f"{prefix} public key is not P-256")
+                continue
+            signed_data = authenticator_data + hashlib.sha256(client_data_json).digest()
+            public_key.verify(
+                signature_value,
+                signed_data,
+                ec.ECDSA(hashes.SHA256()),
+            )
+        except (InvalidSignature, UnsupportedAlgorithm, TypeError, ValueError) as error:
+            errors.append(f"{prefix} cryptographic verification failed: {error}")
+    return errors
 
 
 def schema_catalog() -> tuple[dict[str, dict[str, Any]], Registry]:
@@ -260,6 +439,7 @@ def semantic_errors(envelope: dict[str, Any]) -> list[str]:
     ]
     effective_hashes: dict[str, str] = {}
     for approval in approvals:
+        errors.extend(webauthn_signature_errors(approval))
         if approval["proposal_id"] != proposal["proposal_id"]:
             errors.append(f"approval {approval['approval_id']} points at another proposal")
         if approval["request_id"] != request["request_id"]:
@@ -785,6 +965,11 @@ def validate_repository() -> list[str]:
                     f"{corpus_path} positive {vector['name']}: {error}"
                     for error in semantic_errors(instance)
                 )
+            if vector.get("webauthn") and not vector_has_schema_errors:
+                failures.extend(
+                    f"{corpus_path} positive {vector['name']}: {error}"
+                    for error in webauthn_signature_errors(instance)
+                )
 
         for vector in corpus["negative"]:
             validator = validator_for(vector["schema"], schemas, registry)
@@ -803,7 +988,12 @@ def validate_repository() -> list[str]:
                     "failed schema before semantic check"
                 )
                 continue
-            if not semantic_errors(instance):
+            vector_errors = (
+                webauthn_signature_errors(instance)
+                if vector.get("webauthn")
+                else semantic_errors(instance)
+            )
+            if not vector_errors:
                 failures.append(
                     f"{corpus_path} negative {vector['name']}: "
                     "unexpectedly passed semantic validation"

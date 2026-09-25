@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.0.0/schemas/approval-record.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.1.0/schemas/approval-record.schema.json",
   "title": "ApprovalRecord",
   "description": "An append-only terminal decision bound to the exact effective action and payload reviewed by the approver.",
   "type": "object",
@@ -213,6 +213,38 @@
     {
       "if": {"required": ["modifications"]},
       "then": {"properties": {"decision": {"const": "approved"}}}
+    },
+    {
+      "if": {
+        "properties": {
+          "signatures": {
+            "contains": {
+              "properties": {"algorithm": {"const": "webauthn-es256"}},
+              "required": ["algorithm"]
+            }
+          }
+        },
+        "required": ["signatures"]
+      },
+      "then": {
+        "properties": {
+          "channel": {"const": "web"},
+          "decided_by": {
+            "properties": {
+              "kind": {"const": "human"},
+              "authentication": {
+                "properties": {
+                  "method": {"const": "authenticated_session"},
+                  "human_present": {"const": true},
+                  "assurance": {"const": "high"}
+                },
+                "required": ["method", "human_present", "assurance"]
+              }
+            },
+            "required": ["kind", "authentication"]
+          }
+        }
+      }
     }
   ]
 }
