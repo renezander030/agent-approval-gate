@@ -2,8 +2,8 @@
 
 ## Versioning
 
-The release version and every schema's `schema_version` are `2.1.0`. Schema `$id`
-values resolve through the immutable `v2.1.0` tag. A consumer may cache schemas by
+The release version and every schema's `schema_version` are `3.0.0`. Schema `$id`
+values resolve through the immutable `v3.0.0` tag. A consumer may cache schemas by
 `$id`; it must not replace a cached release schema with content from `main`.
 
 - Patch releases may clarify descriptions and add compatible examples or tests.
@@ -70,6 +70,73 @@ The envelope validator enforces the rules JSON Schema cannot express:
   the exported event array.
 
 Treat a semantic validation error as a hard refusal with a redacted audit reason.
+
+## Version 3 boundaries
+
+Parse JSON before schema validation with duplicate-property detection at every depth.
+Reject `NaN`, infinities, and overflowing numeric literals. Do not silently choose the
+last duplicate property or normalize an ambiguous document before hashing it.
+
+Use a deployment-owned local catalog of released payload schema bytes. The reference
+validator ships `email.send`; `validate_envelope` and `payload_errors` also accept a
+trusted schema-ID-to-file mapping for other action types. Custom schemas identify
+their action with `x-action-type` and use an immutable `/v<version>/` ID. A payload
+schema can have its own version independent of the envelope version. Do not fetch an
+agent-selected schema URL. Verify the ID, version, action type, and raw-file digest,
+then validate both the original payload and every effective edited payload.
+
+Every approval requires the request's exact `policy_evaluation_id`, including human
+decisions. A resolution ID has one terminal approval identity; delivery retries update
+that receipt's delivery state rather than minting another terminal receipt.
+
+Provider invocation requires a consumed request. Its terminal decision must be
+recorded before consumption, and consumption must precede invocation. The consumed
+revision must include both decision and consumption transitions after the revision
+observed by the approver. Decision, consumption, and invocation must occur strictly
+before request expiry; authority is usable only before its required `valid_until`.
+The initial dispatch must include the consumed decision and a complete quorum whose
+every cited approval binds the same effective action. Votes for different edits cannot
+be combined into a quorum.
+
+### Terminal refusals
+
+An envelope covers an admitted request. Rejected, expired, cancelled, and failed
+requests can have empty approval, resolution, authority, and dispatch arrays where
+those steps never occurred. A rejected request still cites its rejecting decision;
+every decision retains its durable resolution. Expiry cannot precede the deadline.
+
+A `not_dispatched` record may have no approval IDs or authority snapshot and must
+have `retry_allowed: false`. It cannot carry provider evidence. If no dispatch step
+occurred, an expiry or cancellation event, or the recorded rejection, describes the
+terminal path without a synthetic invocation. Pending requests are not complete
+envelopes. A pre-admission rejection remains a validation record and audit stream,
+without an admitted-request envelope.
+
+### Dispatch history and recovery
+
+Order dispatch records by recorded history. Each has a unique `dispatch_id`; the
+request retains the first ID as its consumed execution identity. Later records name
+the immediately preceding record with `previous_dispatch_id`. They preserve the
+effective action hash, approval set, stable provider idempotency key, and attempt
+ceiling. A new attempt increments `attempt` by exactly one and cannot begin before
+the preceding result was recorded.
+
+Only an authoritative `failed` result permitting retry, or a linked
+`reconciled_not_applied` result permitting retry, allows another invocation. Unknown
+outcomes require read-only reconciliation. Its record keeps the unknown attempt
+number and lookup identity, and cites evidence checked after the unknown result.
+Success, unresolved uncertainty, and an exhausted attempt ceiling never grant retry.
+Every new invocation requires fresh, active authority; reconciliation does not grant
+execution authority.
+
+### Audit witnesses
+
+A hash-valid stream must also describe the actual lifecycle. Every lifecycle record
+needs a witness on its matching event type. All audit references resolve inside the
+envelope, and supplied decision, action, attempt, policy, and result details agree
+with the record. Decision actor and time agree with the approval; witness times agree
+with the facts they record. Capturing the envelope cannot precede its contained
+evidence. Rehashing a false event never makes it a valid witness.
 
 ## WebAuthn approval proof
 
@@ -144,10 +211,17 @@ approvals that satisfy quorum.
 
 ## Modification profile
 
-Version 2 uses RFC 6902 operations restricted to `/payload`. Allowed operations are `add`,
+Version 3 uses RFC 6902 operations restricted to `/payload`. Allowed operations are `add`,
 `remove`, `replace`, and `test`. `move` and `copy` are deliberately absent: review
 interfaces should show explicit before/after values instead of making an approver
 mentally follow pointer movement.
+
+Array indices are non-negative decimal tokens without leading zeroes. `add` may use
+the array length or `-` to append; other operations require an existing index.
+`replace`, `remove`, and `test` require an existing member. Reject malformed pointer
+escapes and missing parent containers. `test` compares JSON values recursively:
+numbers compare numerically, while booleans remain distinct from numbers. Apply the
+whole patch to a copy; any failure refuses the approval without altering the proposal.
 
 After applying modifications:
 

@@ -1,10 +1,10 @@
 {
-  "name": "agent-approval-gate v2 reference",
+  "name": "agent-approval-gate v3 reference",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "agent-proposal-v2",
+        "path": "agent-proposal-v3",
         "responseMode": "onReceived",
         "options": {}
       },
@@ -13,12 +13,12 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [0, 300],
-      "webhookId": "agent-proposal-v2"
+      "webhookId": "agent-proposal-v3"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_VALIDATOR_URL + '/v2/validate'}}",
+        "url": "={{$env.APPROVAL_VALIDATOR_URL + '/v3/validate'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -68,7 +68,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_GATE_URL + '/v2/validations'}}",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v3/validations'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -87,7 +87,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_GATE_URL + '/v2/validations'}}",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v3/validations'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -106,7 +106,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/events'}}",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v3/events'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -124,7 +124,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_GATE_URL + '/v2/requests'}}",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v3/requests'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -143,7 +143,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/events'}}",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v3/events'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -161,7 +161,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_GATE_URL + '/v2/review-snapshots'}}",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v3/review-snapshots'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -180,7 +180,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/events'}}",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v3/events'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -229,12 +229,12 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [2400, 180],
-      "webhookId": "agent-approval-resume-v2"
+      "webhookId": "agent-approval-resume-v3"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_GATE_URL + '/v2/requests/' + $('Create durable approval request').item.json.request_id + '/resolve'}}",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v3/requests/' + $('Create durable approval request').item.json.request_id + '/resolve'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -253,7 +253,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_GATE_URL + '/v2/resolutions'}}",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v3/resolutions'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -272,7 +272,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/events'}}",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v3/events'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -320,7 +320,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_GATE_URL + '/v2/requests/' + $('Create durable approval request').item.json.request_id + '/consume'}}",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v3/requests/' + $('Create durable approval request').item.json.request_id + '/consume'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -338,7 +338,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_GATE_URL + '/v2/authority-snapshots'}}",
+        "url": "={{$env.APPROVAL_GATE_URL + '/v3/authority-snapshots'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -357,7 +357,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/events'}}",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v3/events'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -440,7 +440,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/events'}}",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v3/events'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -458,7 +458,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/events'}}",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v3/events'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -476,7 +476,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/snapshots'}}",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v3/snapshots'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -495,7 +495,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/events'}}",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v3/events'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
@@ -513,7 +513,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APPROVAL_AUDIT_URL + '/v2/snapshots'}}",
+        "url": "={{$env.APPROVAL_AUDIT_URL + '/v3/snapshots'}}",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",

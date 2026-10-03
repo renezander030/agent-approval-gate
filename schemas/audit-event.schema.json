@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.1.0/schemas/audit-event.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.0.0/schemas/audit-event.schema.json",
   "title": "ApprovalAuditEvent",
   "description": "A redacted, append-only lifecycle event. event_hash is the RFC 8785 SHA-256 digest of this document with event_hash omitted; previous_event_hash links the stream.",
   "type": "object",

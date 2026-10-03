@@ -1,5 +1,43 @@
 # Changelog
 
+## 3.0.0
+
+This release enforces the approval and execution boundaries across complete success,
+edited-action, refusal, expiry, and recovery lifecycles.
+
+### Changed
+
+- Revalidate original and edited payloads against trusted local action schemas,
+  including action type, released version, schema ID, and exact file digest.
+- Require consumed request state before provider invocation, with causal decision,
+  terminal, consumption, and dispatch times and exclusive expiry boundaries.
+- Represent rejection, expiry, cancellation, and failure without inventing approvals
+  or authority checks. Refused dispatches cannot invoke a provider or allow retries.
+- Link dispatch history with `previous_dispatch_id`, stable action and idempotency
+  identities, fixed attempt ceilings, and contiguous retry attempt numbers.
+- Require `policy_evaluation_id` on every decision and bind it to the request policy.
+  Authority evidence requires an explicit `valid_until` boundary.
+- Verify typed audit witnesses against actual records, actors, outcomes, times, and
+  identities; reject foreign references and captures that precede included evidence.
+- Count the complete dispatch quorum only from approvals for one effective action.
+- Enforce JSON Patch target existence, exact array bounds, pointer escapes, and JSON
+  value equality without conflating booleans and numbers.
+- Reject duplicate JSON keys at every depth and non-finite numbers at ingress.
+
+### Added
+
+- Complete edited-action, rejected, expired, and reconciled-retry examples plus
+  portable refusal vectors and focused lifecycle regressions.
+- n8n reference endpoint contracts for `/v3/` integrations.
+
+### Migration
+
+Continue validating stored v2 records with their original schemas. For new v3 records,
+add the request policy evaluation ID to every approval and a finite authority validity
+window. Link retry and reconciliation records to the preceding dispatch record; retain
+the initial consumed dispatch identity and stable idempotency key. Recompute hashes
+and signatures after adopting the v3 schema IDs. Do not relabel historical records.
+
 ## 2.1.0
 
 This release adds an optional WebAuthn proof profile for independently verifiable

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.1.0/schemas/validation-record.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.0.0/schemas/validation-record.schema.json",
   "title": "ValidationRecord",
   "description": "Immutable pre-admission evidence that an exact proposed action passed structural, payload, semantic, policy-input, and authorization-input checks before a human was notified.",
   "type": "object",

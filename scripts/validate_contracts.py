@@ -8,8 +8,11 @@ import base64
 import binascii
 import hashlib
 import json
+import math
+import re
 from copy import deepcopy
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -29,7 +32,7 @@ def load(path: str | Path) -> Any:
     target = Path(path)
     if not target.is_absolute():
         target = ROOT / target
-    return json.loads(target.read_text(encoding="utf-8"))
+    return strict_json_loads(target.read_text(encoding="utf-8"))
 
 
 def digest(value: Any) -> str:
@@ -55,6 +58,22 @@ def _object_without_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, An
             raise ValueError(f"duplicate JSON property: {key}")
         value[key] = item
     return value
+
+
+def strict_json_loads(value: str) -> Any:
+    def reject_constant(_: str) -> Any:
+        raise ValueError("non-finite JSON number")
+
+    def finite_float(value: str) -> float:
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError("non-finite JSON number")
+        return number
+
+    return json.loads(
+        value, object_pairs_hook=_object_without_duplicate_keys,
+        parse_constant=reject_constant, parse_float=finite_float,
+    )
 
 
 def webauthn_signature_errors(approval: dict[str, Any]) -> list[str]:
@@ -112,10 +131,7 @@ def webauthn_signature_errors(approval: dict[str, Any]) -> list[str]:
             continue
 
         try:
-            client_data = json.loads(
-                client_data_json.decode("utf-8"),
-                object_pairs_hook=_object_without_duplicate_keys,
-            )
+            client_data = strict_json_loads(client_data_json.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
             errors.append(f"{prefix} contains invalid clientDataJSON: {error}")
             continue
@@ -209,6 +225,7 @@ def webauthn_signature_errors(approval: dict[str, Any]) -> list[str]:
     return errors
 
 
+@lru_cache(maxsize=1)
 def schema_catalog() -> tuple[dict[str, dict[str, Any]], Registry]:
     schemas: dict[str, dict[str, Any]] = {}
     resources: list[tuple[str, Resource[Any]]] = []
@@ -231,30 +248,78 @@ def validator_for(
     )
 
 
+def _array_index(token: str, length: int, *, add: bool = False) -> int:
+    if add and token == "-":
+        return length
+    if not re.fullmatch(r"0|[1-9][0-9]*", token):
+        raise ValueError("invalid JSON Pointer array index")
+    index = int(token)
+    if index > length or (index == length and not add):
+        raise ValueError("JSON Pointer array index is out of bounds")
+    return index
+
+
 def _pointer_parent(document: Any, path: str) -> tuple[Any, str]:
     if not path.startswith("/"):
         raise ValueError(f"JSON Pointer must start with '/': {path}")
+    if re.search(r"~(?![01])", path):
+        raise ValueError("invalid JSON Pointer escape")
     tokens = [token.replace("~1", "/").replace("~0", "~") for token in path[1:].split("/")]
     current = document
     for token in tokens[:-1]:
-        current = current[int(token)] if isinstance(current, list) else current[token]
+        if isinstance(current, list):
+            current = current[_array_index(token, len(current))]
+        elif isinstance(current, dict) and token in current:
+            current = current[token]
+        else:
+            raise ValueError("JSON Pointer parent does not exist")
     return current, tokens[-1]
+
+
+def _json_equal(left: Any, right: Any) -> bool:
+    if isinstance(left, bool) or isinstance(right, bool):
+        return type(left) is type(right) and left == right
+    if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+        return left == right
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return left.keys() == right.keys() and all(_json_equal(left[k], right[k]) for k in left)
+    if isinstance(left, list):
+        return len(left) == len(right) and all(_json_equal(a, b) for a, b in zip(left, right))
+    return left == right
 
 
 def apply_operations(document: Any, operations: list[dict[str, Any]]) -> Any:
     result = deepcopy(document)
     for operation in operations:
-        parent, key = _pointer_parent(result, operation["path"])
         op = operation["op"]
+        if op not in {"add", "remove", "replace", "test"}:
+            raise ValueError(f"unsupported operation: {op}")
+        if operation["path"] == "":
+            if op == "remove":
+                raise ValueError("removing the document root is not supported")
+            if op == "test":
+                if not _json_equal(result, operation["value"]):
+                    raise ValueError("test operation failed at root")
+            else:
+                result = deepcopy(operation["value"])
+            continue
+        parent, key = _pointer_parent(result, operation["path"])
+        if not isinstance(parent, (dict, list)):
+            raise ValueError("JSON Pointer parent is not a container")
+        if isinstance(parent, list):
+            index = _array_index(key, len(parent), add=op == "add")
+        elif op != "add" and key not in parent:
+            raise ValueError("JSON Pointer target does not exist")
         if op == "remove":
             if isinstance(parent, list):
-                parent.pop(int(key))
+                parent.pop(index)
             else:
                 del parent[key]
         elif op in {"add", "replace"}:
             value = deepcopy(operation["value"])
             if isinstance(parent, list):
-                index = len(parent) if key == "-" else int(key)
                 if op == "add":
                     parent.insert(index, value)
                 else:
@@ -262,11 +327,9 @@ def apply_operations(document: Any, operations: list[dict[str, Any]]) -> Any:
             else:
                 parent[key] = value
         elif op == "test":
-            actual = parent[int(key)] if isinstance(parent, list) else parent[key]
-            if actual != operation["value"]:
+            actual = parent[index] if isinstance(parent, list) else parent[key]
+            if not _json_equal(actual, operation["value"]):
                 raise ValueError(f"test operation failed at {operation['path']}")
-        else:
-            raise ValueError(f"unsupported operation: {op}")
     return result
 
 
@@ -293,7 +356,185 @@ def canonicalization_errors() -> list[str]:
     return errors
 
 
-def semantic_errors(envelope: dict[str, Any]) -> list[str]:
+def payload_errors(action: dict[str, Any], schema_files: dict[str, Path] | None = None) -> list[str]:
+    """Use locally supplied released bytes; never resolve an agent-selected URL."""
+    if "payload" not in action:
+        return ["effective action has no payload"]
+    files = {
+        load(path)["$id"]: path
+        for path in (ROOT / "schemas" / "actions").glob("*.json")
+    }
+    files.update(schema_files or {})
+    binding = action["payload_schema"]
+    path = files.get(binding["id"])
+    if path is None:
+        return ["payload schema is not available in the trusted local catalog"]
+    try:
+        schema = load(path)
+        if schema["$id"] != binding["id"]:
+            return ["payload schema ID mismatch"]
+        if f"/v{binding['version']}/" not in binding["id"]:
+            return ["payload schema version mismatch"]
+        expected_type = schema.get("x-action-type", path.name.removesuffix(".schema.json"))
+        if expected_type != action["action_type"]:
+            return ["payload schema action type mismatch"]
+        file_hash = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+        if binding["digest"] != file_hash:
+            return ["payload schema digest mismatch"]
+        Draft202012Validator.check_schema(schema)
+        _, registry = schema_catalog()
+        registry = registry.with_resource(schema["$id"], Resource.from_contents(schema))
+        validator = Draft202012Validator(schema, registry=registry, format_checker=FormatChecker())
+        if list(validator.iter_errors(action["payload"])):
+            return ["effective payload fails its action schema"]
+    except Exception:
+        return ["payload schema could not be validated from the trusted catalog"]
+    return []
+
+
+def validate_envelope(envelope: Any, schema_files: dict[str, Path] | None = None) -> list[str]:
+    schemas, registry = schema_catalog()
+    validator = validator_for("schemas/approval-envelope.schema.json", schemas, registry)
+    if list(validator.iter_errors(envelope)):
+        return ["envelope fails structural validation"]
+    try:
+        return semantic_errors(envelope, schema_files)
+    except (ValueError, TypeError, KeyError, IndexError, rfc8785.CanonicalizationError):
+        return ["envelope contains invalid semantic input"]
+
+
+def dispatch_history_errors(dispatches: list[dict[str, Any]], request: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    previous: dict[str, Any] | None = None
+    for record in dispatches:
+        if record["retry_allowed"] and record["attempt"] >= record["max_attempts"]:
+            errors.append("dispatch at attempt ceiling cannot allow retry")
+        reconciled = record["status"].startswith("reconciled_")
+        if previous is None:
+            if reconciled or record["attempt"] != 1 or "previous_dispatch_id" in record:
+                errors.append("dispatch history must start with an initial attempt")
+            if request["status"] == "consumed" and record["dispatch_id"] != request["dispatch_id"]:
+                errors.append("dispatch history does not start at the consumed dispatch")
+        else:
+            if record.get("previous_dispatch_id") != previous["dispatch_id"]:
+                errors.append("dispatch history previous_dispatch_id linkage is broken")
+            for field in ("action_hash", "idempotency_key", "max_attempts"):
+                if record[field] != previous[field]:
+                    errors.append(f"dispatch history changes {field}")
+            if set(record["approval_ids"]) != set(previous["approval_ids"]):
+                errors.append("dispatch history changes the consumed approval set")
+            if parse_time(record["started_at"]) < parse_time(previous["recorded_at"]):
+                errors.append("dispatch history starts before prior outcome was recorded")
+            if reconciled:
+                if previous["status"] != "outcome_unknown" or record["attempt"] != previous["attempt"]:
+                    errors.append("reconciliation must resolve the preceding unknown attempt")
+                if previous.get("reconciliation") and record["reconciliation"]["lookup_key_hash"] != previous["reconciliation"]["lookup_key_hash"]:
+                    errors.append("reconciliation changed its lookup identity")
+                if parse_time(record["reconciliation"]["checked_at"]) < parse_time(previous["recorded_at"]):
+                    errors.append("reconciliation evidence predates the unknown outcome")
+                if parse_time(record["reconciliation"]["checked_at"]) > parse_time(record["recorded_at"]):
+                    errors.append("reconciliation was recorded before its evidence")
+            else:
+                if previous["status"] not in {"failed", "reconciled_not_applied"} or not previous["retry_allowed"]:
+                    errors.append("retry requires authoritative failure or reconciled non-application")
+                if record["attempt"] != previous["attempt"] + 1:
+                    errors.append("retry attempt numbers must be contiguous")
+        previous = record
+    return errors
+
+
+def audit_binding_errors(envelope: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    request = envelope["request"]
+    records = {
+        "validation_id": {x["validation_id"]: x for x in envelope["validations"]},
+        "review_snapshot_id": {x["snapshot_id"]: x for x in envelope["review_snapshots"]},
+        "request_id": {request["request_id"]: request},
+        "approval_id": {x["approval_id"]: x for x in envelope["approvals"]},
+        "resolution_id": {x["resolution_id"]: x for x in envelope["resolutions"]},
+        "authority_snapshot_id": {x["authority_snapshot_id"]: x for x in envelope["authority_snapshots"]},
+        "dispatch_id": {x["dispatch_id"]: x for x in envelope["dispatches"]},
+        "audit_snapshot_id": {envelope["audit_snapshot"]["snapshot_id"]: envelope["audit_snapshot"]},
+        "policy_evaluation_id": {request["policy"]["evaluation_id"]: request["policy"]},
+    }
+    witness_types = {
+        "validation_id": {"validation.passed", "validation.rejected"},
+        "review_snapshot_id": {"review.presented"},
+        "request_id": {"approval.requested"},
+        "approval_id": {"approval.decided"},
+        "resolution_id": {"resolution.emitted"},
+        "authority_snapshot_id": {"authority.checked"},
+        "dispatch_id": {"dispatch.not_dispatched", "dispatch.succeeded", "dispatch.failed", "dispatch.outcome_unknown", "dispatch.reconciled"},
+        "audit_snapshot_id": {"audit.snapshotted"},
+    }
+    witnessed: dict[str, set[str]] = {key: set() for key in witness_types}
+    event_ids: set[str] = set()
+    for event in envelope["audit_events"]:
+        if event["event_id"] in event_ids:
+            errors.append("audit events reuse event_id")
+        event_ids.add(event["event_id"])
+        refs = event["references"]
+        event_type = event["event_type"]
+        for key, value in refs.items():
+            if value not in records[key]:
+                errors.append(f"audit event references unknown {key}")
+                continue
+            if event_type in witness_types.get(key, set()):
+                witnessed[key].add(value)
+        primary_keys = [key for key, types in witness_types.items() if event_type in types]
+        for key in primary_keys:
+            if key not in refs:
+                errors.append(f"audit {event_type} lacks its {key} witness")
+        detail = event["detail"]
+        primary = next((records[key].get(refs.get(key)) for key in primary_keys if records[key].get(refs.get(key))), None)
+        if primary is None:
+            continue
+        for key in ("action_hash", "payload_hash", "decision", "attempt"):
+            if key in detail and key in primary and detail[key] != primary[key]:
+                errors.append(f"audit {event_type} {key} disagrees with its record")
+        for key in ("approval_id", "request_id", "proposal_id"):
+            if key in refs and key in primary and refs[key] != primary[key]:
+                errors.append(f"audit {event_type} {key} disagrees with its record")
+        if "policy_revision" in detail and detail["policy_revision"] != request["policy"]["revision"]:
+            errors.append("audit policy revision mismatch")
+        if event_type == "validation.passed" and primary["outcome"] != "passed":
+            errors.append("audit validation outcome disagrees with validation record")
+        if event_type == "validation.rejected" and primary["outcome"] == "passed":
+            errors.append("audit validation outcome disagrees with validation record")
+        if event_type == "review.presented" and "review_content_hash" in detail and detail["review_content_hash"] != primary["content_hash"]:
+            errors.append("audit review content hash disagrees with snapshot")
+        if event_type == "approval.decided":
+            if event["actor"]["kind"] != primary["decided_by"]["kind"] or event["actor"]["identifier"] != primary["decided_by"]["identifier"]:
+                errors.append("audit decision actor disagrees with approval")
+            if parse_time(event["occurred_at"]) != parse_time(primary["decided_at"]):
+                errors.append("audit decision time disagrees with approval")
+        if event_type.startswith("dispatch."):
+            expected = {
+                "succeeded": "dispatch.succeeded", "failed": "dispatch.failed",
+                "not_dispatched": "dispatch.not_dispatched", "outcome_unknown": "dispatch.outcome_unknown",
+                "reconciled_succeeded": "dispatch.reconciled", "reconciled_not_applied": "dispatch.reconciled",
+            }[primary["status"]]
+            if event_type != expected:
+                errors.append("audit dispatch outcome disagrees with dispatch record")
+            if "provider_result_hash" in detail and detail["provider_result_hash"] != primary.get("provider", {}).get("result_hash"):
+                errors.append("audit provider result hash disagrees with dispatch record")
+        witness_time = {
+            "validation.passed": "validated_at", "validation.rejected": "validated_at",
+            "review.presented": "rendered_at", "approval.requested": "requested_at",
+            "resolution.emitted": "emitted_at", "authority.checked": "checked_at",
+            "dispatch.succeeded": "completed_at", "dispatch.failed": "completed_at",
+            "dispatch.outcome_unknown": "completed_at", "dispatch.not_dispatched": "completed_at",
+            "dispatch.reconciled": "completed_at", "audit.snapshotted": "captured_at",
+        }.get(event_type)
+        if witness_time and parse_time(event["occurred_at"]) != parse_time(primary[witness_time]):
+            errors.append("audit witness time disagrees with its record")
+    for key, witnesses in witnessed.items():
+        if set(records[key]) - witnesses:
+            errors.append(f"audit stream lacks typed witnesses for {key}")
+    return errors
+
+
+def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | None = None) -> list[str]:
     errors: list[str] = []
     proposal = envelope["proposal"]
     validations = envelope["validations"]
@@ -305,6 +546,19 @@ def semantic_errors(envelope: dict[str, Any]) -> list[str]:
     dispatches = envelope["dispatches"]
     events = envelope["audit_events"]
     audit_snapshot = envelope["audit_snapshot"]
+
+    errors.extend(payload_errors(proposal, schema_files))
+    for records in (validations, review_snapshots, approvals, resolutions, authority_snapshots, dispatches):
+        if any(record["proposal_id"] != proposal["proposal_id"] for record in records):
+            errors.append("lifecycle record points at another proposal")
+    if request["status"] == "pending":
+        errors.append("complete envelope cannot contain a pending request")
+    invocation_statuses = {"succeeded", "failed", "outcome_unknown"}
+    invokes_provider = any(item["status"] in invocation_statuses for item in dispatches)
+    if invokes_provider and request["status"] != "consumed":
+        errors.append("provider invocation requires a consumed request")
+    if request["status"] in {"rejected", "expired", "cancelled", "failed"} and invokes_provider:
+        errors.append("refused request cannot invoke a provider")
 
     initial_action_hash = digest(proposal)
     if request["action_hash"] != initial_action_hash:
@@ -414,7 +668,9 @@ def semantic_errors(envelope: dict[str, Any]) -> list[str]:
             errors.append(f"review snapshot {snapshot['snapshot_id']} was rendered after expiry")
         if proposal["action_type"] == "email.send":
             expected_target = {
-                key: proposal["payload"][key] for key in ("from", "to", "cc")
+                key: snapshot["content"]["arguments"][key]
+                for key in ("from", "to", "cc")
+                if key in snapshot["content"]["arguments"]
             }
             if snapshot["content"]["target"] != expected_target:
                 errors.append(
@@ -444,7 +700,24 @@ def semantic_errors(envelope: dict[str, Any]) -> list[str]:
             errors.append(f"approval {approval['approval_id']} points at another proposal")
         if approval["request_id"] != request["request_id"]:
             errors.append(f"approval {approval['approval_id']} points at another request")
-        effective_action = apply_operations(proposal, approval.get("modifications", []))
+        operations = approval.get("modifications", [])
+        if any(op["path"] != "/payload" and not op["path"].startswith("/payload/") for op in operations):
+            errors.append("approval modifications must remain inside payload")
+            continue
+        try:
+            effective_action = apply_operations(proposal, operations)
+        except (ValueError, TypeError, KeyError, IndexError):
+            errors.append(f"approval {approval['approval_id']} has invalid JSON Patch")
+            continue
+        schemas, registry = schema_catalog()
+        effective_validator = validator_for("schemas/proposed-action.schema.json", schemas, registry)
+        if list(effective_validator.iter_errors(effective_action)):
+            errors.append(f"approval {approval['approval_id']} effective action fails proposal schema")
+            errors.extend(payload_errors(effective_action, schema_files))
+            continue
+        errors.extend(payload_errors(effective_action, schema_files))
+        if approval["policy_evaluation_id"] != request["policy"]["evaluation_id"]:
+            errors.append(f"approval {approval['approval_id']} policy evaluation mismatch")
         expected_action_hash = digest(effective_action)
         expected_payload_hash = digest(effective_action["payload"])
         effective_hashes[approval["approval_id"]] = expected_action_hash
@@ -491,11 +764,11 @@ def semantic_errors(envelope: dict[str, Any]) -> list[str]:
         if approval["decision"] in {"approved", "auto_approved", "rejected"}:
             if decided_at < requested_at:
                 errors.append(f"approval {approval['approval_id']} predates its request")
-            if parse_time(approval["decided_at"]) > request_expires_at:
+            if parse_time(approval["decided_at"]) >= request_expires_at:
                 errors.append(f"approval {approval['approval_id']} was decided after expiry")
 
     requirements = request["policy"]["requirements"]
-    if len(approved_records) < requirements["minimum_approvals"]:
+    if request["status"] in {"approved", "consumed"} and len(approved_records) < requirements["minimum_approvals"]:
         errors.append("approval quorum is not satisfied")
     if requirements["distinct_approvers"]:
         actors = {
@@ -566,6 +839,8 @@ def semantic_errors(envelope: dict[str, Any]) -> list[str]:
         if approval is None:
             errors.append(f"resolution {resolution_id} names an unknown approval")
             continue
+        if approval["approval_id"] in resolved_approval_ids:
+            errors.append("approval has more than one terminal resolution receipt")
         resolved_approval_ids.add(approval["approval_id"])
         if resolution["approval_record_hash"] != digest(approval):
             errors.append(f"resolution {resolution_id} approval_record_hash mismatch")
@@ -666,6 +941,9 @@ def semantic_errors(envelope: dict[str, Any]) -> list[str]:
             )
 
     approval_ids = {approval["approval_id"] for approval in approved_records}
+    dispatch_by_id = {item["dispatch_id"]: item for item in dispatches}
+    if len(dispatch_by_id) != len(dispatches):
+        errors.append("dispatch records reuse dispatch_id")
     for dispatch in dispatches:
         if dispatch["proposal_id"] != proposal["proposal_id"]:
             errors.append(f"dispatch {dispatch['dispatch_id']} points at another proposal")
@@ -678,18 +956,24 @@ def semantic_errors(envelope: dict[str, Any]) -> list[str]:
             for item in dispatch["approval_ids"]
             if item in effective_hashes
         }
-        if dispatch["action_hash"] not in expected_hashes:
-            errors.append(f"dispatch {dispatch['dispatch_id']} action_hash is not approved")
+        if dispatch["status"] == "not_dispatched":
+            if dispatch["action_hash"] not in set(effective_hashes.values()) | {initial_action_hash}:
+                errors.append("refusal dispatch action_hash does not match lifecycle")
+        else:
+            if expected_hashes != {dispatch["action_hash"]}:
+                errors.append(f"dispatch {dispatch['dispatch_id']} mixes or lacks approved action hashes")
+            cited = [approval_by_id[item] for item in dispatch["approval_ids"] if item in approval_ids]
+            if len(cited) < requirements["minimum_approvals"]:
+                errors.append(f"dispatch {dispatch['dispatch_id']} approval quorum is not satisfied")
         if dispatch["idempotency_key"] != proposal["idempotency_key"]:
             errors.append(f"dispatch {dispatch['dispatch_id']} changed the idempotency key")
         if dispatch["attempt"] > dispatch["max_attempts"]:
             errors.append(f"dispatch {dispatch['dispatch_id']} exceeds max_attempts")
         started_at = parse_time(dispatch["started_at"])
-        authority = authority_by_id.get(dispatch["authority_snapshot_id"])
+        authority = authority_by_id.get(dispatch.get("authority_snapshot_id"))
         if authority is None:
-            errors.append(
-                f"dispatch {dispatch['dispatch_id']} names an unknown authority snapshot"
-            )
+            if dispatch["status"] in invocation_statuses or "authority_snapshot_id" in dispatch:
+                errors.append(f"dispatch {dispatch['dispatch_id']} names an unknown authority snapshot")
         else:
             checked_at = parse_time(authority["checked_at"])
             if authority["action_hash"] != dispatch["action_hash"]:
@@ -704,11 +988,11 @@ def semantic_errors(envelope: dict[str, Any]) -> list[str]:
                 errors.append(
                     f"dispatch {dispatch['dispatch_id']} authority check predates consumption"
                 )
-            if "valid_until" in authority and started_at > parse_time(authority["valid_until"]):
+            if dispatch["status"] in invocation_statuses and started_at >= parse_time(authority["valid_until"]):
                 errors.append(
                     f"dispatch {dispatch['dispatch_id']} used expired authority evidence"
                 )
-            if dispatch["status"] != "not_dispatched" and authority["status"] != "active":
+            if dispatch["status"] in invocation_statuses and authority["status"] != "active":
                 errors.append(
                     f"dispatch {dispatch['dispatch_id']} used inactive authority"
                 )
@@ -727,13 +1011,26 @@ def semantic_errors(envelope: dict[str, Any]) -> list[str]:
             else None
         )
         recorded_at = parse_time(dispatch["recorded_at"])
-        if started_at > proposal_expires_at:
+        if dispatch["status"] in invocation_statuses and started_at >= min(proposal_expires_at, request_expires_at):
             errors.append(f"dispatch {dispatch['dispatch_id']} started after proposal expiry")
         if completed_at and completed_at < started_at:
             errors.append(f"dispatch {dispatch['dispatch_id']} completed before it started")
         if recorded_at < (completed_at or started_at):
             errors.append(f"dispatch {dispatch['dispatch_id']} was recorded too early")
 
+    terminal_at = parse_time(request["terminal_at"]) if "terminal_at" in request else None
+    decision_record = approval_by_id.get(request.get("decision_record_id"))
+    if terminal_at is not None:
+        if terminal_at < requested_at:
+            errors.append("request terminal state predates its request")
+        if decision_record and terminal_at < parse_time(decision_record["recorded_at"]):
+            errors.append("request terminal state predates its decision record")
+    if request["status"] == "approved" and (not decision_record or decision_record["decision"] not in {"approved", "auto_approved"}):
+        errors.append("approved request lacks an approving decision")
+    if request["status"] == "rejected" and (not decision_record or decision_record["decision"] != "rejected"):
+        errors.append("rejected request lacks a rejecting decision")
+    if request["status"] == "expired" and terminal_at and terminal_at < request_expires_at:
+        errors.append("expired request terminated before its expiry")
     if request["status"] == "consumed":
         if request["decision_record_id"] not in approval_ids:
             errors.append("consumed request does not name an approving decision")
@@ -742,11 +1039,29 @@ def semantic_errors(envelope: dict[str, Any]) -> list[str]:
         consumed_at = parse_time(request["consumed_at"])
         if consumed_at < requested_at:
             errors.append("request was consumed before it was created")
+        if consumed_at >= request_expires_at:
+            errors.append("request was consumed at or after expiry")
+        if terminal_at and consumed_at < terminal_at:
+            errors.append("request was consumed before its terminal decision")
+        if decision_record and consumed_at < parse_time(decision_record["recorded_at"]):
+            errors.append("request was consumed before its decision was recorded")
+        if decision_record and request["revision"] < decision_record["request_revision"] + 2:
+            errors.append("consumed request lacks decision and consumption revisions")
         matching_dispatches = [
             item for item in dispatches if item["dispatch_id"] == request["dispatch_id"]
         ]
         if matching_dispatches and parse_time(matching_dispatches[0]["started_at"]) < consumed_at:
             errors.append("dispatch started before the request was consumed")
+        if matching_dispatches and request["decision_record_id"] not in matching_dispatches[0]["approval_ids"]:
+            errors.append("consumption decision is not in the initial dispatch approval set")
+    errors.extend(dispatch_history_errors(dispatches, request))
+    captured_at = parse_time(envelope["captured_at"])
+    for records, fields in ((validations, ("validated_at",)), (review_snapshots, ("rendered_at",)),
+                           (approvals, ("recorded_at",)), (resolutions, ("emitted_at",)),
+                           (authority_snapshots, ("checked_at",)), (dispatches, ("recorded_at",)),
+                           (events, ("recorded_at",)), ([audit_snapshot], ("captured_at",))):
+        if any(parse_time(record[field]) > captured_at for record in records for field in fields):
+            errors.append("envelope capture predates a contained record")
 
     expected_previous: str | None = None
     previous_recorded_at: datetime | None = None
@@ -797,18 +1112,25 @@ def semantic_errors(envelope: dict[str, Any]) -> list[str]:
         "validation.passed",
         "approval.requested",
         "review.presented",
-        "approval.decided",
-        "resolution.emitted",
-        "authority.checked",
         "audit.snapshotted",
     }
+    if approvals:
+        required_event_types.add("approval.decided")
+    if resolutions:
+        required_event_types.add("resolution.emitted")
+    if authority_snapshots:
+        required_event_types.add("authority.checked")
+    if request["status"] == "expired":
+        required_event_types.add("approval.expired")
+    if request["status"] == "cancelled":
+        required_event_types.add("approval.cancelled")
     missing_event_types = sorted(required_event_types - event_types)
     if missing_event_types:
         errors.append(
             "audit stream lacks required lifecycle events: "
             + ", ".join(missing_event_types)
         )
-    if not event_types.intersection(
+    if dispatches and not event_types.intersection(
         {
             "dispatch.succeeded",
             "dispatch.failed",
@@ -838,6 +1160,7 @@ def semantic_errors(envelope: dict[str, Any]) -> list[str]:
     for key, expected in expected_audit_references.items():
         if not expected.issubset(observed_audit_references[key]):
             errors.append(f"audit stream omits a {key} lifecycle reference")
+    errors.extend(audit_binding_errors(envelope))
     return errors
 
 
@@ -904,17 +1227,17 @@ def n8n_reference_errors() -> list[str]:
     if unreachable:
         errors.append(f"n8n required nodes are unreachable: {', '.join(unreachable)}")
     rendered = json.dumps(workflow, sort_keys=True)
-    if "'/v1/" in rendered or '"/v1/' in rendered:
-        errors.append("n8n workflow still references a v1 contract endpoint")
+    if re.search(r"/v[12]/", rendered):
+        errors.append("n8n workflow still references an older contract endpoint")
     for endpoint in (
-        "/v2/validate",
-        "/v2/validations",
-        "/v2/requests",
-        "/v2/review-snapshots",
-        "/v2/resolutions",
-        "/v2/authority-snapshots",
-        "/v2/events",
-        "/v2/snapshots",
+        "/v3/validate",
+        "/v3/validations",
+        "/v3/requests",
+        "/v3/review-snapshots",
+        "/v3/resolutions",
+        "/v3/authority-snapshots",
+        "/v3/events",
+        "/v3/snapshots",
     ):
         if endpoint not in rendered:
             errors.append(f"n8n workflow does not reference {endpoint}")
@@ -942,7 +1265,7 @@ def validate_repository() -> list[str]:
         if "/main/" in identifier:
             failures.append(f"{path}: $id points at mutable main")
 
-    for corpus_path in ("tests/conformance.json", "tests/adversarial.json"):
+    for corpus_path in ("tests/conformance.json", "tests/adversarial.json", "tests/hardening.json"):
         corpus = load(corpus_path)
         for vector in corpus["positive"]:
             validator = validator_for(vector["schema"], schemas, registry)
@@ -998,6 +1321,8 @@ def validate_repository() -> list[str]:
                     f"{corpus_path} negative {vector['name']}: "
                     "unexpectedly passed semantic validation"
                 )
+            if vector.get("expect_error") and not any(vector["expect_error"] in error for error in vector_errors):
+                failures.append(f"{corpus_path} negative {vector['name']}: expected refusal reason was not reported")
     failures.extend(canonicalization_errors())
     failures.extend(f"n8n reference: {error}" for error in n8n_reference_errors())
     return failures
@@ -1007,7 +1332,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
-    failures = validate_repository()
+    try:
+        failures = validate_repository()
+    except (ValueError, TypeError, KeyError, IndexError, rfc8785.CanonicalizationError):
+        failures = ["contract input could not be validated"]
     if failures:
         for failure in failures:
             print(f"FAIL: {failure}")

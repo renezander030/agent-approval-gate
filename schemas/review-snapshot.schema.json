@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.1.0/schemas/review-snapshot.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.0.0/schemas/review-snapshot.schema.json",
   "title": "ReviewSnapshot",
   "description": "The exact decision material presented to an approver, bound to the effective action and payload by canonical hashes.",
   "type": "object",

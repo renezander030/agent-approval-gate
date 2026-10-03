@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.1.0",
+  "schema_version": "3.0.0",
   "approval_id": "approval_2026-04-28_0e1bb000",
   "request_id": "req_2026-04-28_91cc7000",
   "proposal_id": "prop_2026-04-28_9d7e0f13",
@@ -44,5 +44,6 @@
       "label": "CRM target record absent after rejection"
     },
     "note": "Polled the CRM record after the decision landed. No write was present."
-  }
+  },
+  "policy_evaluation_id": "eval_2026-04-28_1c4f8a00"
 }

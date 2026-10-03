@@ -53,7 +53,7 @@ Nine boundaries make the gate real:
 If the agent still has the side-effect credential, the approval path remains optional
 from the agent's point of view.
 
-## Contracts in v2.1.0
+## Contracts in v3.0.0
 
 | Contract | Purpose |
 |---|---|
@@ -71,7 +71,7 @@ from the agent's point of view.
 | [`approval-envelope.schema.json`](schemas/approval-envelope.schema.json) | Portable bundle plus cross-contract profile for a completed lifecycle |
 | [`actions/email.send.schema.json`](schemas/actions/email.send.schema.json) | Strict reference for composing action-specific payload contracts |
 
-Schema IDs are pinned to the `v2.1.0` release. Pin a released ID in production; do not
+Schema IDs are pinned to the `v3.0.0` release. Pin a released ID in production; do not
 resolve schemas from the mutable default branch.
 
 ## Quick start
@@ -99,6 +99,14 @@ The complete synthetic lifecycle is in
 [`examples/approval-envelope.json`](examples/approval-envelope.json). The validator
 checks IDs, hashes, quorum, expiry, sequence linkage, and attempt ceilings that JSON
 Schema alone cannot compare across documents.
+
+Version 3 also supplies complete [edited](examples/edited-envelope.json),
+[rejected](examples/rejected-envelope.json), [expired](examples/expired-envelope.json),
+and [recovered](examples/recovered-envelope.json) lifecycles. Refusal is a normal
+terminal result; it requires neither an approving decision nor a provider invocation.
+Recovery retains the unknown attempt, a linked reconciliation record, and a bounded
+retry with fresh authority. The portable vectors in
+[`tests/hardening.json`](tests/hardening.json) cover these boundaries.
 
 [`tests/canonicalization.json`](tests/canonicalization.json) is a language-neutral
 RFC 8785 corpus with exact canonical UTF-8 bytes and SHA-256 results. Use it to prove
