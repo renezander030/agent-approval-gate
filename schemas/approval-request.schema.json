@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.1.0/schemas/approval-request.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.0.0/schemas/approval-request.schema.json",
   "title": "ApprovalRequest",
   "description": "Durable state for one pending approval. Resolve it by request_id with compare-and-set semantics; never infer authority from payload shape or conversation text.",
   "type": "object",

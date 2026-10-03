@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.1.0/schemas/dispatch-record.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.0.0/schemas/dispatch-record.schema.json",
   "title": "DispatchRecord",
   "description": "An append-only record for one deterministic dispatch attempt or reconciliation result. outcome_unknown is never an invitation to retry blindly.",
   "type": "object",
@@ -10,7 +10,6 @@
     "proposal_id",
     "request_id",
     "approval_ids",
-    "authority_snapshot_id",
     "action_hash",
     "idempotency_key",
     "attempt",
@@ -24,11 +23,12 @@
   "properties": {
     "schema_version": {"$ref": "common.schema.json#/$defs/schema_version"},
     "dispatch_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "previous_dispatch_id": {"$ref": "common.schema.json#/$defs/identifier"},
     "proposal_id": {"$ref": "common.schema.json#/$defs/identifier"},
     "request_id": {"$ref": "common.schema.json#/$defs/identifier"},
     "approval_ids": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 0,
       "maxItems": 16,
       "uniqueItems": true,
       "items": {"$ref": "common.schema.json#/$defs/identifier"}
@@ -69,7 +69,10 @@
         "provider_timeout",
         "provider_response_lost",
         "attempt_limit",
-        "dispatcher_error"
+        "dispatcher_error",
+        "approval_rejected",
+        "approval_cancelled",
+        "request_failed"
       ]
     },
     "provider": {
@@ -168,6 +171,44 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "not_dispatched"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retry_allowed": {
+            "const": false
+          }
+        },
+        "not": {
+          "required": [
+            "provider"
+          ]
+        }
+      },
+      "else": {
+        "properties": {
+          "approval_ids": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"status": {"enum": ["succeeded", "failed", "outcome_unknown"]}},
+        "required": ["status"]
+      },
+      "then": {"required": ["authority_snapshot_id"]}
     }
   ]
 }

@@ -1,0 +1,194 @@
+{
+  "positive": [
+    {
+      "name": "rejected lifecycle",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/rejected-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "expired lifecycle",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/expired-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "recovered lifecycle",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/recovered-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "approved effective edit",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/edited-envelope.json",
+      "semantic": true
+    }
+  ],
+  "negative": [
+    {
+      "name": "approved but unconsumed request cannot invoke provider",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "expect_error": "provider invocation requires a consumed request",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/status",
+          "value": "approved"
+        },
+        {
+          "op": "replace",
+          "path": "/request/terminal_reason",
+          "value": "approved"
+        },
+        {
+          "op": "remove",
+          "path": "/request/consumed_at"
+        },
+        {
+          "op": "remove",
+          "path": "/request/dispatch_id"
+        }
+      ]
+    },
+    {
+      "name": "edited payload must retain required fields",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "expect_error": "effective payload fails its action schema",
+      "operations": [
+        {
+          "op": "add",
+          "path": "/approvals/0/modifications",
+          "value": [
+            {
+              "op": "remove",
+              "path": "/payload/subject"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "payload schema digest names exact file bytes",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "expect_error": "payload schema digest mismatch",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/proposal/payload_schema/digest",
+          "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "name": "decision must cite exact policy evaluation",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "expect_error": "policy evaluation mismatch",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/approvals/0/policy_evaluation_id",
+          "value": "eval_other_01"
+        }
+      ]
+    },
+    {
+      "name": "consumption needs two state transitions",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "expect_error": "consumption revisions",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/revision",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "name": "retry cannot change attempt ceiling",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/recovered-envelope.json",
+      "expect": "semantic",
+      "expect_error": "changes max_attempts",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/dispatches/2/max_attempts",
+          "value": 4
+        }
+      ]
+    },
+    {
+      "name": "retry cannot skip attempt number",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/recovered-envelope.json",
+      "expect": "semantic",
+      "expect_error": "attempt numbers must be contiguous",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/dispatches/2/attempt",
+          "value": 3
+        }
+      ]
+    },
+    {
+      "name": "audit cannot cite foreign lifecycle record",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "expect_error": "references unknown dispatch_id",
+      "operations": [
+        {
+          "op": "add",
+          "path": "/audit_events/0/references/dispatch_id",
+          "value": "dispatch_foreign_01"
+        }
+      ]
+    },
+    {
+      "name": "negative patch indices are refused",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "expect_error": "invalid JSON Patch",
+      "operations": [
+        {
+          "op": "add",
+          "path": "/approvals/0/modifications",
+          "value": [
+            {
+              "op": "replace",
+              "path": "/payload/to/-1",
+              "value": "other@example.com"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "expired requests cannot expire early",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/expired-envelope.json",
+      "expect": "semantic",
+      "expect_error": "terminated before its expiry",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/terminal_at",
+          "value": "2026-04-28T09:14:25Z"
+        }
+      ]
+    }
+  ]
+}

@@ -222,6 +222,13 @@ release examples and negative corpus.
 Production systems should perform the same checks in their implementation language at
 each boundary, not invoke the repository's development script as a network service.
 
+Version 3 requires strict JSON parsing, trusted local payload schema bytes, an exact
+policy evaluation on every decision, and a consumed request before provider invocation.
+Quorum is evaluated for the cited effective action, not across unrelated edits.
+Unknown outcomes and retry history remain append-only; refusal is a complete terminal
+path without a fabricated approval or invocation. See the version 3 boundary rules in
+[`contracts.md`](contracts.md).
+
 ## Channel choice
 
 | Channel | Trust | Latency | Notes |

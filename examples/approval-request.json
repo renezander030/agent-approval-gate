@@ -1,10 +1,10 @@
 {
-  "schema_version": "2.1.0",
+  "schema_version": "3.0.0",
   "request_id": "req_2026-04-28_6a2d8800",
   "proposal_id": "prop_2026-04-28_b3f1a2c4",
   "call_id": "call_2026-04-28_7e19c5ad",
   "tenant": "acme-corp",
-  "action_hash": "sha256:e2e1a44e6cb6f86c61e1131d6cd2d63ccc5c1654a18d8744121b4387179491d3",
+  "action_hash": "sha256:94710a0a0a7cebd31eda4a86a91ad493fd162495484726cf7b13fd7906ef5f8c",
   "validation_id": "validation_2026-04-28_841ac000",
   "review_snapshot_id": "review_2026-04-28_47b2c000",
   "callback_nonce_hash": "sha256:91eaf28be1fa8121d74d9ce65298da05363c70dfb691c4c4e1a17691bb09966a",
@@ -23,12 +23,12 @@
     }
   },
   "policy": {
-    "schema_version": "2.1.0",
+    "schema_version": "3.0.0",
     "policy_id": "policy.high-risk-email.v1",
     "revision": "2026-04-15.3",
     "policy_digest": "sha256:a4f5ac837738a43e70baa0f2d602bbba2f2285a518beb568746f310f0678dc35",
     "evaluation_id": "eval_2026-04-28_1c4f8a00",
-    "material_input_hash": "sha256:e2e1a44e6cb6f86c61e1131d6cd2d63ccc5c1654a18d8744121b4387179491d3",
+    "material_input_hash": "sha256:94710a0a0a7cebd31eda4a86a91ad493fd162495484726cf7b13fd7906ef5f8c",
     "evaluated_at": "2026-04-28T09:14:24Z",
     "requirements": {
       "minimum_approvals": 1,

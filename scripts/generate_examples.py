@@ -41,6 +41,126 @@ def base64url(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
+def refresh_audit(envelope: dict[str, Any]) -> None:
+    previous = None
+    for index, event in enumerate(envelope["audit_events"], 1):
+        event["sequence"] = index
+        event["previous_event_hash"] = previous
+        event["event_hash"] = digest_value({k: v for k, v in event.items() if k != "event_hash"})
+        previous = event["event_hash"]
+    events = envelope["audit_events"]
+    envelope["audit_snapshot"].update(
+        entry_count=len(events), first_sequence=1, last_sequence=len(events),
+        events_digest=digest_value(events), root_event_hash=previous,
+    )
+
+
+def lifecycle_examples(base: dict[str, Any]) -> None:
+    edited = deepcopy(base)
+    approval = edited["approvals"][0]
+    approval["modifications"] = [{"op": "replace", "path": "/payload/subject", "value": "Re: invoice export restored"}]
+    effective = deepcopy(edited["proposal"])
+    effective["payload"]["subject"] = "Re: invoice export restored"
+    action_hash = digest_value(effective)
+    payload_hash = digest_value(effective["payload"])
+    review = deepcopy(edited["review_snapshots"][0])
+    review.update(snapshot_id="review_edited_01", action_hash=action_hash, payload_hash=payload_hash, rendered_at="2026-04-28T09:14:26Z")
+    review["content"]["arguments"] = deepcopy(effective["payload"])
+    review["content_hash"] = digest_value(review["content"])
+    edited["review_snapshots"].append(review)
+    approval.update(action_hash=action_hash, payload_hash=payload_hash, review_snapshot_id=review["snapshot_id"], review_content_hash=review["content_hash"])
+    edited["resolutions"][0].update(action_hash=action_hash, approval_record_hash=digest_value(approval))
+    edited["authority_snapshots"][0]["action_hash"] = action_hash
+    edited["dispatches"][0]["action_hash"] = action_hash
+    review_event = deepcopy(edited["audit_events"][3])
+    review_event.update(event_id="event_edited_review_01", occurred_at=review["rendered_at"], recorded_at=review["rendered_at"])
+    review_event["references"]["review_snapshot_id"] = review["snapshot_id"]
+    review_event["detail"].update(action_hash=action_hash, payload_hash=payload_hash, review_content_hash=review["content_hash"])
+    edited["audit_events"].insert(4, review_event)
+    for event in edited["audit_events"][5:]:
+        if "action_hash" in event["detail"]:
+            event["detail"]["action_hash"] = action_hash
+        if "payload_hash" in event["detail"]:
+            event["detail"]["payload_hash"] = payload_hash
+    refresh_audit(edited)
+    write("edited-envelope.json", edited)
+
+    rejected = deepcopy(base)
+    request = rejected["request"]
+    request.update(status="rejected", revision=2, terminal_reason="rejected")
+    request.pop("consumed_at")
+    request.pop("dispatch_id")
+    approval = rejected["approvals"][0]
+    approval.update(decision="rejected", rejection_settlement={"state": "unresolved"})
+    resolution = rejected["resolutions"][0]
+    resolution.update(decision="rejected", disposition="do_not_execute", retry_policy="never", approval_record_hash=digest_value(approval))
+    rejected["authority_snapshots"] = []
+    dispatch = rejected["dispatches"][0]
+    dispatch.update(status="not_dispatched", approval_ids=[], reason="approval_rejected")
+    dispatch.pop("authority_snapshot_id")
+    dispatch.pop("provider")
+    rejected["audit_events"] = [e for e in rejected["audit_events"] if e["event_type"] != "authority.checked"]
+    for event in rejected["audit_events"]:
+        if event["event_type"] in {"approval.decided", "resolution.emitted"}:
+            event["detail"]["decision"] = "rejected"
+        if event["event_type"] == "dispatch.succeeded":
+            event["event_type"] = "dispatch.not_dispatched"
+            event["detail"] = {"action_hash": dispatch["action_hash"], "reason_code": "approval_rejected"}
+    refresh_audit(rejected)
+    write("rejected-envelope.json", rejected)
+
+    expired = deepcopy(base)
+    expiry = expired["request"]["expires_at"]
+    expired["request"].update(status="expired", revision=2, terminal_at=expiry, terminal_reason="deadline_elapsed")
+    for key in ("consumed_at", "dispatch_id", "decision_record_id"):
+        expired["request"].pop(key)
+    for key in ("approvals", "resolutions", "authority_snapshots", "dispatches"):
+        expired[key] = []
+    expiry_event = deepcopy(expired["audit_events"][4])
+    expiry_event.update(event_type="approval.expired", occurred_at=expiry, recorded_at=expiry, actor=deepcopy(expired["request"]["requested_by"]), references={"request_id": expired["request"]["request_id"]}, detail={"reason_code": "deadline_elapsed"})
+    snapshot_event = deepcopy(expired["audit_events"][-1])
+    snapshot_event.update(occurred_at=expiry, recorded_at=expiry)
+    expired["audit_events"] = expired["audit_events"][:4] + [expiry_event, snapshot_event]
+    expired["captured_at"] = expired["audit_snapshot"]["captured_at"] = expiry
+    refresh_audit(expired)
+    write("expired-envelope.json", expired)
+
+    recovered = deepcopy(base)
+    first = recovered["dispatches"][0]
+    first.update(status="outcome_unknown", reason="provider_response_lost", reconciliation={"lookup_key_hash": digest_value("provider-lookup-01"), "status": "pending"})
+    first.pop("provider")
+    reconciled = deepcopy(first)
+    reconciled.update(dispatch_id="dispatch_reconciled_01", previous_dispatch_id=first["dispatch_id"], status="reconciled_not_applied", retry_allowed=True, started_at="2026-04-28T09:14:35Z", completed_at="2026-04-28T09:14:35Z", recorded_at="2026-04-28T09:14:35Z")
+    reconciled.pop("reason")
+    reconciled["reconciliation"].update(status="not_applied", checked_at="2026-04-28T09:14:35Z", evidence={"kind":"reconciliation", "uri":"urn:example:lookup:01", "digest":digest_value("not-applied")})
+    retry = deepcopy(base["dispatches"][0])
+    retry.update(dispatch_id="dispatch_retry_02", previous_dispatch_id=reconciled["dispatch_id"], attempt=2, started_at="2026-04-28T09:14:36Z", completed_at="2026-04-28T09:14:37Z", recorded_at="2026-04-28T09:14:37Z", authority_snapshot_id="authority_retry_02")
+    retry_authority = deepcopy(recovered["authority_snapshots"][0])
+    retry_authority.update(authority_snapshot_id="authority_retry_02", checked_at="2026-04-28T09:14:36Z")
+    recovered["authority_snapshots"].append(retry_authority)
+    recovered["dispatches"] = [first, reconciled, retry]
+    events = recovered["audit_events"]
+    first_event = events[-2]
+    first_event["event_type"] = "dispatch.outcome_unknown"
+    first_event["detail"].pop("provider_result_hash")
+    reconciliation_event = deepcopy(first_event)
+    reconciliation_event.update(event_id="event_reconciled_01", event_type="dispatch.reconciled", occurred_at=reconciled["completed_at"], recorded_at=reconciled["recorded_at"])
+    reconciliation_event["references"]["dispatch_id"] = reconciled["dispatch_id"]
+    authority_event = deepcopy(events[-3])
+    authority_event.update(event_id="event_retry_authority_02", occurred_at=retry_authority["checked_at"], recorded_at=retry_authority["checked_at"])
+    authority_event["references"]["authority_snapshot_id"] = retry_authority["authority_snapshot_id"]
+    retry_event = deepcopy(base["audit_events"][-2])
+    retry_event.update(event_id="event_retry_02", occurred_at=retry["completed_at"], recorded_at=retry["recorded_at"])
+    retry_event["references"]["dispatch_id"] = retry["dispatch_id"]
+    retry_event["detail"]["attempt"] = 2
+    final_event = events[-1]
+    final_event.update(occurred_at="2026-04-28T09:14:38Z", recorded_at="2026-04-28T09:14:38Z")
+    recovered["audit_events"] = events[:-1] + [reconciliation_event, authority_event, retry_event, final_event]
+    recovered["captured_at"] = recovered["audit_snapshot"]["captured_at"] = "2026-04-28T09:14:38Z"
+    refresh_audit(recovered)
+    write("recovered-envelope.json", recovered)
+
+
 def main() -> None:
     proposal = load("email-reply-approval.json")
     proposal["payload_schema"]["digest"] = digest_file(
@@ -191,7 +311,7 @@ def main() -> None:
     write("audit-snapshot.json", audit_snapshot)
 
     envelope = {
-        "schema_version": "2.1.0",
+        "schema_version": "3.0.0",
         "captured_at": "2026-04-28T09:14:35Z",
         "proposal": proposal,
         "validations": [validation],
@@ -205,6 +325,7 @@ def main() -> None:
         "audit_snapshot": audit_snapshot,
     }
     write("approval-envelope.json", envelope)
+    lifecycle_examples(envelope)
 
 
 if __name__ == "__main__":

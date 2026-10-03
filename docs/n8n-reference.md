@@ -8,7 +8,7 @@ deployment-owned endpoints below.
 
 ### Validator
 
-`POST $APPROVAL_VALIDATOR_URL/v2/validate`
+`POST $APPROVAL_VALIDATOR_URL/v3/validate`
 
 Input: `{ "schema": "proposed-action.schema.json", "instance": { ... } }`
 
@@ -20,30 +20,37 @@ the pinned release IDs. The returned validation object is a complete
 
 ### Gate
 
-- `POST /v2/validations` durably records the validator's result for the exact action.
-- `POST /v2/requests` persists policy and request state before notification.
-- `POST /v2/review-snapshots` renders and persists the exact decision surface.
-- `POST /v2/requests/{id}/resolve` verifies callback signature, nonce, tenant,
+- `POST /v3/validations` durably records the validator's result for the exact action.
+- `POST /v3/requests` persists policy and request state before notification.
+- `POST /v3/review-snapshots` renders and persists the exact decision surface.
+- `POST /v3/requests/{id}/resolve` verifies callback signature, nonce, tenant,
   action hash, review content hash, expiry, status, and expected revision in one
   transaction.
-- `POST /v2/resolutions` stores and delivers the terminal decision receipt. Delivery
+- `POST /v3/resolutions` stores and delivers the terminal decision receipt. Delivery
   retries reuse the same receipt and target hash.
-- `POST /v2/requests/{id}/consume` changes one approved request to consumed and returns
+- `POST /v3/requests/{id}/consume` changes one approved request to consumed and returns
   one short-lived dispatch grant. Duplicate consumption returns the original terminal
   identity or a conflict, never a new grant.
-- `POST /v2/authority-snapshots` rechecks the approver, policy, workspace, and
+- `POST /v3/authority-snapshots` rechecks the approver, policy, workspace, and
   dispatcher immediately before provider invocation.
 
 The raw callback nonce appears only in the signed review link. The durable request
 stores its hash.
 
+Version 3 endpoints emit `policy_evaluation_id` on every decision and `valid_until`
+on authority snapshots. The dispatcher checks the consumed decision set and counts
+quorum only over the exact effective action. Refusal endpoints may return no approving
+records or authority snapshot; they never return a usable dispatch grant. Store each
+retry or reconciliation with its `previous_dispatch_id`, retaining the initial consumed
+dispatch identity. The workflow does not perform automatic provider retries.
+
 ### Audit sink
 
-`POST $APPROVAL_AUDIT_URL/v2/events` accepts a redacted event intent. The sink assigns
+`POST $APPROVAL_AUDIT_URL/v3/events` accepts a redacted event intent. The sink assigns
 sequence, previous hash, event hash, ingestion time, classification, and retention
 under an append-only transaction. Do not let n8n clients choose sequence or hashes.
 
-`POST $APPROVAL_AUDIT_URL/v2/snapshots` returns a complete export manifest after a
+`POST $APPROVAL_AUDIT_URL/v3/snapshots` returns a complete export manifest after a
 terminal event. Verify its event count, sequence bounds, event-set digest, and terminal
 chain hash before archiving the run.
 

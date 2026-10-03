@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v2.1.0/schemas/approval-envelope.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.0.0/schemas/approval-envelope.schema.json",
   "title": "ApprovalEnvelope",
   "description": "A complete portable lifecycle bundle. JSON Schema checks structure; scripts/validate_contracts.py also checks cross-record identity, hashes, quorum, time, sequence, and attempt invariants.",
   "type": "object",
@@ -38,25 +38,25 @@
     "request": {"$ref": "approval-request.schema.json"},
     "approvals": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 0,
       "maxItems": 16,
       "items": {"$ref": "approval-record.schema.json"}
     },
     "resolutions": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 0,
       "maxItems": 100,
       "items": {"$ref": "resolution-record.schema.json"}
     },
     "authority_snapshots": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 0,
       "maxItems": 100,
       "items": {"$ref": "authority-snapshot.schema.json"}
     },
     "dispatches": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 0,
       "maxItems": 100,
       "items": {"$ref": "dispatch-record.schema.json"}
     },
