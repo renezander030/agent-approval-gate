@@ -179,6 +179,10 @@ compatibility rules.
 
 ## Related work
 
+- [Action-bound approval audit in SQLite (PAAN #15)](https://gist.github.com/renezander030/ad81c7a805a09a844983f881e2c487e5) — persistence errors block release; action/payload/target-version binding and revocation.
+- [Tested automation reference examples](https://github.com/renezander030/automation-reference-examples) — offline fixtures for malformed hook input, uncertain queue dispatch, approval consumption and permission revocation.
+
+
 - [Production AI Automation Notes #1: Agent Approval Gates](https://gist.github.com/renezander030/9069db775e494ffd2cdd5a09adf83add)
 - [Claude Code with local LLMs](https://gist.github.com/renezander030/39249215616a095d74fe6c66b0348641)
 - [Claude Code runtime rules](https://gist.github.com/renezander030/2898eb5f0100688f4197b5e493e156a2)
