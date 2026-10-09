@@ -271,8 +271,8 @@
       "approval_record_hash": "sha256:abec2cf7d95c29f2061519342329afa22f74c08df321b764677d90abe526896a",
       "decision": "rejected",
       "terminal": true,
-      "disposition": "do_not_execute",
-      "retry_policy": "never",
+      "disposition": "revise_and_resubmit",
+      "retry_policy": "new_proposal",
       "emitted_at": "2026-04-28T09:14:32Z",
       "delivery": {
         "target_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
@@ -280,6 +280,16 @@
         "status": "acknowledged",
         "last_attempt_at": "2026-04-28T09:14:32Z",
         "acknowledged_at": "2026-04-28T09:14:32Z"
+      },
+      "agent_feedback": {
+        "reason_code": "incorrect_content",
+        "message": "The reply promises a restore date that engineering has not confirmed.",
+        "requested_changes": [
+          {
+            "path": "/payload/body_text",
+            "note": "Remove the restore date and link the status page instead."
+          }
+        ]
       }
     }
   ],
@@ -499,7 +509,7 @@
       "stream_id": "stream_prop_b3f1a2c4",
       "sequence": 6,
       "previous_event_hash": "sha256:cf57a31101130006a4cb79e762480e7ce804bfc5ace0cce51b8c88cf228bcadb",
-      "event_hash": "sha256:e97628dd7fabc5be4bb9c1270ce8ea3ef812d2c4d27b19cfb0421acd3cf0a315",
+      "event_hash": "sha256:c9a007b389c54f19ddbee4e89ef5e4990aab60bb7d9231ec56f257b3f488cce5",
       "event_type": "resolution.emitted",
       "occurred_at": "2026-04-28T09:14:32Z",
       "recorded_at": "2026-04-28T09:14:32Z",
@@ -528,7 +538,8 @@
       },
       "detail": {
         "decision": "rejected",
-        "action_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b"
+        "action_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b",
+        "reason_code": "incorrect_content"
       }
     },
     {
@@ -536,8 +547,8 @@
       "event_id": "event_2026-04-28_00000008",
       "stream_id": "stream_prop_b3f1a2c4",
       "sequence": 7,
-      "previous_event_hash": "sha256:e97628dd7fabc5be4bb9c1270ce8ea3ef812d2c4d27b19cfb0421acd3cf0a315",
-      "event_hash": "sha256:ef969cf942ae3f78dc1b0626aa92794d4fee7dc8d4f4cb2d0a97a93367c7a61f",
+      "previous_event_hash": "sha256:c9a007b389c54f19ddbee4e89ef5e4990aab60bb7d9231ec56f257b3f488cce5",
+      "event_hash": "sha256:31aa6536e160ab7bf7202f624146c0594df7e3ccf944fde1264e353c17448792",
       "event_type": "dispatch.not_dispatched",
       "occurred_at": "2026-04-28T09:14:34Z",
       "recorded_at": "2026-04-28T09:14:34Z",
@@ -574,8 +585,8 @@
       "event_id": "event_2026-04-28_00000009",
       "stream_id": "stream_prop_b3f1a2c4",
       "sequence": 8,
-      "previous_event_hash": "sha256:ef969cf942ae3f78dc1b0626aa92794d4fee7dc8d4f4cb2d0a97a93367c7a61f",
-      "event_hash": "sha256:5305c11376a6e723564bcf6de2c6211c1deed35cd0e0f2fc8d275e705e1c750c",
+      "previous_event_hash": "sha256:31aa6536e160ab7bf7202f624146c0594df7e3ccf944fde1264e353c17448792",
+      "event_hash": "sha256:bdaa62480dbec230488998b2b096ed8f967451388cf5411cb160a878b9b3e81d",
       "event_type": "audit.snapshotted",
       "occurred_at": "2026-04-28T09:14:35Z",
       "recorded_at": "2026-04-28T09:14:35Z",
@@ -612,7 +623,7 @@
     "entry_count": 8,
     "first_sequence": 1,
     "last_sequence": 8,
-    "events_digest": "sha256:616b1c70e3876af5302e4626e4c6e06a5d83eb5920a5f4cd3cf50ee36197f2ad",
-    "root_event_hash": "sha256:5305c11376a6e723564bcf6de2c6211c1deed35cd0e0f2fc8d275e705e1c750c"
+    "events_digest": "sha256:67fe3563617427f58cfec061d4fd70130f278bc5f2a34975b16a4579d0c12cd4",
+    "root_event_hash": "sha256:bdaa62480dbec230488998b2b096ed8f967451388cf5411cb160a878b9b3e81d"
   }
 }

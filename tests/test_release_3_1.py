@@ -204,5 +204,50 @@ class RevocationTests(unittest.TestCase):
         self.refused(self.envelope, "audit revocation actor disagrees with request")
 
 
+class AgentFeedbackTests(unittest.TestCase):
+    SCHEMA = "schemas/resolution-record.schema.json"
+
+    def setUp(self) -> None:
+        self.envelope = load("examples/rejected-envelope.json")
+        self.resolution = self.envelope["resolutions"][0]
+
+    def test_rejection_carries_structured_feedback(self) -> None:
+        self.assertEqual(validate_envelope(self.envelope), [])
+        self.assertEqual(self.resolution["agent_feedback"]["reason_code"], "incorrect_content")
+
+    def test_feedback_never_accompanies_an_approval(self) -> None:
+        approved = load("examples/resolution-record.json")
+        approved["agent_feedback"] = {"reason_code": "other", "message": "Looks fine"}
+        self.assertTrue(schema_errors(self.SCHEMA, approved))
+
+    def test_requested_changes_require_a_new_proposal(self) -> None:
+        self.resolution.update(disposition="do_not_execute", retry_policy="never")
+        self.assertTrue(schema_errors(self.SCHEMA, self.resolution))
+
+    def test_questions_require_a_new_proposal(self) -> None:
+        feedback = self.resolution["agent_feedback"]
+        feedback.pop("requested_changes")
+        feedback.update(reason_code="needs_information", questions=["Which invoice period does the customer mean?"])
+        self.assertEqual(schema_errors(self.SCHEMA, self.resolution), [])
+        self.resolution["retry_policy"] = "never"
+        self.assertTrue(schema_errors(self.SCHEMA, self.resolution))
+
+    def test_requested_changes_stay_inside_the_payload(self) -> None:
+        for path in ("/tenant", "/payload_schema/id", "payload/subject", "/payload/~2"):
+            with self.subTest(path=path):
+                self.resolution["agent_feedback"]["requested_changes"][0]["path"] = path
+                self.assertTrue(schema_errors(self.SCHEMA, self.resolution))
+
+    def test_feedback_text_rejects_display_controls(self) -> None:
+        self.resolution["agent_feedback"]["message"] = "Approve \u202eetaler"
+        self.assertTrue(schema_errors(self.SCHEMA, self.resolution))
+
+    def test_audit_reason_must_match_feedback(self) -> None:
+        event = next(e for e in self.envelope["audit_events"] if e["event_type"] == "resolution.emitted")
+        event["detail"]["reason_code"] = "policy_violation"
+        refresh_audit(self.envelope)
+        self.assertIn("audit resolution reason disagrees with agent feedback", validate_envelope(self.envelope))
+
+
 if __name__ == "__main__":
     unittest.main()

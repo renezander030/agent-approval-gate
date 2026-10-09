@@ -522,6 +522,10 @@ def audit_binding_errors(envelope: dict[str, Any]) -> list[str]:
             errors.append("audit validation outcome disagrees with validation record")
         if event_type == "validation.rejected" and primary["outcome"] == "passed":
             errors.append("audit validation outcome disagrees with validation record")
+        if event_type == "resolution.emitted" and "reason_code" in detail:
+            feedback = primary.get("agent_feedback")
+            if not feedback or feedback["reason_code"] != detail["reason_code"]:
+                errors.append("audit resolution reason disagrees with agent feedback")
         if event_type == "review.presented" and "review_content_hash" in detail and detail["review_content_hash"] != primary["content_hash"]:
             errors.append("audit review content hash disagrees with snapshot")
         if event_type == "approval.decided":

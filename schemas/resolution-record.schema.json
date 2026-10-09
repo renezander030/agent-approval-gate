@@ -41,6 +41,48 @@
     },
     "retry_policy": {"type": "string", "enum": ["delivery_only", "new_proposal", "never"]},
     "emitted_at": {"type": "string", "format": "date-time"},
+    "agent_feedback": {
+      "description": "Structured guidance returned to the proposing agent with a refusal. It informs a new proposal; it never reopens this decision.",
+      "type": "object",
+      "required": ["reason_code", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "reason_code": {
+          "type": "string",
+          "enum": [
+            "policy_violation",
+            "incorrect_content",
+            "wrong_target",
+            "needs_information",
+            "out_of_scope",
+            "too_risky",
+            "timing",
+            "other"
+          ]
+        },
+        "message": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 1000},
+        "requested_changes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "required": ["path", "note"],
+            "additionalProperties": false,
+            "properties": {
+              "path": {"type": "string", "pattern": "^/payload(/([^~/]|~[01])*)*$", "maxLength": 512},
+              "note": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 500}
+            }
+          }
+        },
+        "questions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "items": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 500}
+        }
+      }
+    },
     "delivery": {
       "type": "object",
       "required": ["target_hash", "attempt", "status", "last_attempt_at"],
@@ -86,6 +128,26 @@
     }
   },
   "allOf": [
+    {
+      "if": {"required": ["agent_feedback"]},
+      "then": {"properties": {"decision": {"enum": ["rejected", "expired", "cancelled"]}}}
+    },
+    {
+      "if": {
+        "properties": {
+          "agent_feedback": {
+            "anyOf": [{"required": ["requested_changes"]}, {"required": ["questions"]}]
+          }
+        },
+        "required": ["agent_feedback"]
+      },
+      "then": {
+        "properties": {
+          "disposition": {"const": "revise_and_resubmit"},
+          "retry_policy": {"const": "new_proposal"}
+        }
+      }
+    },
     {
       "if": {"properties": {"decision": {"enum": ["approved", "auto_approved"]}}, "required": ["decision"]},
       "then": {

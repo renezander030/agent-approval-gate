@@ -93,7 +93,12 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     approval = rejected["approvals"][0]
     approval.update(decision="rejected", rejection_settlement={"state": "unresolved"})
     resolution = rejected["resolutions"][0]
-    resolution.update(decision="rejected", disposition="do_not_execute", retry_policy="never", approval_record_hash=digest_value(approval))
+    resolution.update(decision="rejected", disposition="revise_and_resubmit", retry_policy="new_proposal", approval_record_hash=digest_value(approval))
+    resolution["agent_feedback"] = {
+        "reason_code": "incorrect_content",
+        "message": "The reply promises a restore date that engineering has not confirmed.",
+        "requested_changes": [{"path": "/payload/body_text", "note": "Remove the restore date and link the status page instead."}],
+    }
     rejected["authority_snapshots"] = []
     dispatch = rejected["dispatches"][0]
     dispatch.update(status="not_dispatched", approval_ids=[], reason="approval_rejected")
@@ -103,6 +108,8 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     for event in rejected["audit_events"]:
         if event["event_type"] in {"approval.decided", "resolution.emitted"}:
             event["detail"]["decision"] = "rejected"
+        if event["event_type"] == "resolution.emitted":
+            event["detail"]["reason_code"] = resolution["agent_feedback"]["reason_code"]
         if event["event_type"] == "dispatch.succeeded":
             event["event_type"] = "dispatch.not_dispatched"
             event["detail"] = {"action_hash": dispatch["action_hash"], "reason_code": "approval_rejected"}
