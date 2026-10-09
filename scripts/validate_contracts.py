@@ -1354,7 +1354,7 @@ def validate_repository() -> list[str]:
         if "/main/" in identifier:
             failures.append(f"{path}: $id points at mutable main")
 
-    for corpus_path in ("tests/conformance.json", "tests/adversarial.json", "tests/hardening.json"):
+    for corpus_path in ("tests/conformance.json", "tests/adversarial.json", "tests/hardening.json", "tests/release-3.1.json"):
         corpus = load(corpus_path)
         for vector in corpus["positive"]:
             validator = validator_for(vector["schema"], schemas, registry)
