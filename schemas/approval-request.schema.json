@@ -38,7 +38,7 @@
     "expires_at": {"type": "string", "format": "date-time"},
     "status": {
       "type": "string",
-      "enum": ["pending", "approved", "rejected", "expired", "cancelled", "failed", "consumed"]
+      "enum": ["pending", "approved", "rejected", "expired", "cancelled", "failed", "consumed", "revoked"]
     },
     "revision": {"type": "integer", "minimum": 1},
     "requested_by": {"$ref": "common.schema.json#/$defs/actor"},
@@ -85,8 +85,31 @@
         "callback_invalid",
         "policy_failed",
         "delivery_failed",
-        "consumed_for_dispatch"
+        "consumed_for_dispatch",
+        "approval_revoked"
       ]
+    },
+    "revocation": {
+      "description": "Withdrawal of an approved, unconsumed request. A conditional transition from approved to revoked must fail when the request was already consumed.",
+      "type": "object",
+      "required": ["revoked_at", "revoked_by", "reason_code"],
+      "additionalProperties": false,
+      "properties": {
+        "revoked_at": {"type": "string", "format": "date-time"},
+        "revoked_by": {"$ref": "common.schema.json#/$defs/actor"},
+        "reason_code": {
+          "type": "string",
+          "enum": [
+            "approver_withdrew",
+            "authority_changed",
+            "policy_changed",
+            "target_changed",
+            "superseded",
+            "security_hold"
+          ]
+        },
+        "safe_detail": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 500}
+      }
     }
   },
   "allOf": [
@@ -178,6 +201,20 @@
           ]
         }
       }
+    },
+    {
+      "if": {"properties": {"status": {"const": "revoked"}}, "required": ["status"]},
+      "then": {
+        "required": ["terminal_at", "terminal_reason", "decision_record_id", "revocation"],
+        "properties": {"terminal_reason": {"const": "approval_revoked"}},
+        "not": {
+          "anyOf": [
+            {"required": ["consumed_at"]},
+            {"required": ["dispatch_id"]}
+          ]
+        }
+      },
+      "else": {"not": {"required": ["revocation"]}}
     },
     {
       "if": {"properties": {"status": {"const": "consumed"}}, "required": ["status"]},

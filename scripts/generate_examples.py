@@ -125,6 +125,33 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     refresh_audit(expired)
     write("expired-envelope.json", expired)
 
+    revoked = deepcopy(base)
+    revoked_at = "2026-04-28T09:14:34Z"
+    request = revoked["request"]
+    request.update(status="revoked", revision=3, terminal_at=revoked_at, terminal_reason="approval_revoked")
+    request.pop("consumed_at")
+    request.pop("dispatch_id")
+    revoker = deepcopy(revoked["approvals"][0]["decided_by"])
+    request["revocation"] = {"revoked_at": revoked_at, "revoked_by": revoker, "reason_code": "target_changed", "safe_detail": "Customer replied on another thread before dispatch"}
+    revoked["authority_snapshots"] = []
+    dispatch = revoked["dispatches"][0]
+    dispatch.update(status="not_dispatched", approval_ids=[], reason="approval_revoked", started_at="2026-04-28T09:14:35Z", completed_at="2026-04-28T09:14:35Z", recorded_at="2026-04-28T09:14:35Z")
+    dispatch.pop("authority_snapshot_id")
+    dispatch.pop("provider")
+    events = [e for e in revoked["audit_events"] if e["event_type"] != "authority.checked"]
+    revocation_event = deepcopy(next(e for e in events if e["event_type"] == "approval.decided"))
+    revocation_event.update(event_id="event_revoked_01", event_type="approval.revoked", occurred_at=revoked_at, recorded_at=revoked_at, actor=deepcopy(revoker), references={"request_id": request["request_id"]}, detail={"reason_code": "target_changed"})
+    for event in events:
+        if event["event_type"] == "dispatch.succeeded":
+            event.update(event_type="dispatch.not_dispatched", occurred_at=dispatch["completed_at"], recorded_at=dispatch["recorded_at"])
+            event["references"].pop("approval_id")
+            event["detail"] = {"action_hash": dispatch["action_hash"], "reason_code": "approval_revoked"}
+    index = next(i for i, e in enumerate(events) if e["event_type"] == "dispatch.not_dispatched")
+    events.insert(index, revocation_event)
+    revoked["audit_events"] = events
+    refresh_audit(revoked)
+    write("revoked-envelope.json", revoked)
+
     recovered = deepcopy(base)
     first = recovered["dispatches"][0]
     first.update(status="outcome_unknown", reason="provider_response_lost", reconciliation={"lookup_key_hash": digest_value("provider-lookup-01"), "status": "pending"})

@@ -152,5 +152,57 @@ class ActionCatalogTests(unittest.TestCase):
                 self.assertIn(f"review snapshot {review['snapshot_id']} changes the {action_type} target", errors)
 
 
+class RevocationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.envelope = load("examples/revoked-envelope.json")
+
+    def refused(self, envelope: dict, reason: str) -> None:
+        refresh_audit(envelope)
+        errors = validate_envelope(envelope)
+        self.assertTrue(any(reason in error for error in errors), errors)
+
+    def test_revoked_lifecycle_is_complete(self) -> None:
+        self.assertEqual(validate_envelope(self.envelope), [])
+
+    def test_consumed_request_cannot_be_revoked(self) -> None:
+        request = self.envelope["request"]
+        request["consumed_at"] = request["terminal_at"]
+        request["dispatch_id"] = self.envelope["dispatches"][0]["dispatch_id"]
+        self.assertTrue(schema_errors("schemas/approval-request.schema.json", request))
+
+    def test_revocation_only_on_revoked_requests(self) -> None:
+        request = load("examples/approval-envelope.json")["request"]
+        request["revocation"] = deepcopy(self.envelope["request"]["revocation"])
+        self.assertTrue(schema_errors("schemas/approval-request.schema.json", request))
+
+    def test_revocation_needs_an_approving_decision(self) -> None:
+        approval = self.envelope["approvals"][0]
+        approval.update(decision="rejected", rejection_settlement={"state": "unresolved"})
+        self.envelope["resolutions"][0].update(decision="rejected", disposition="do_not_execute", retry_policy="never", approval_record_hash=digest(approval))
+        for event in self.envelope["audit_events"]:
+            if event["event_type"] in {"approval.decided", "resolution.emitted"}:
+                event["detail"]["decision"] = "rejected"
+        self.refused(self.envelope, "revoked request lacks an approving decision")
+
+    def test_revocation_after_expiry_is_refused(self) -> None:
+        request = self.envelope["request"]
+        request["revocation"]["revoked_at"] = request["terminal_at"] = request["expires_at"]
+        self.refused(self.envelope, "revocation occurred at or after request expiry")
+
+    def test_revoked_request_cannot_invoke_provider(self) -> None:
+        base = load("examples/approval-envelope.json")
+        self.envelope["dispatches"] = base["dispatches"]
+        self.refused(self.envelope, "provider invocation requires a consumed request")
+
+    def test_revocation_needs_its_audit_witness(self) -> None:
+        self.envelope["audit_events"] = [e for e in self.envelope["audit_events"] if e["event_type"] != "approval.revoked"]
+        self.refused(self.envelope, "audit stream lacks required lifecycle events: approval.revoked")
+
+    def test_revocation_witness_must_agree(self) -> None:
+        event = next(e for e in self.envelope["audit_events"] if e["event_type"] == "approval.revoked")
+        event["actor"]["identifier"] = "someone-else@example.com"
+        self.refused(self.envelope, "audit revocation actor disagrees with request")
+
+
 if __name__ == "__main__":
     unittest.main()

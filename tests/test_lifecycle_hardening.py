@@ -27,7 +27,7 @@ class LifecycleHardeningTests(unittest.TestCase):
         self.assertTrue(any(reason in error for error in errors), errors)
 
     def test_positive_terminal_and_recovery_lifecycles(self) -> None:
-        for name in ("approval", "edited", "rejected", "expired", "recovered"):
+        for name in ("approval", "edited", "rejected", "expired", "recovered", "revoked"):
             with self.subTest(name=name):
                 self.assertEqual(validate_envelope(load(f"examples/{name}-envelope.json")), [])
 

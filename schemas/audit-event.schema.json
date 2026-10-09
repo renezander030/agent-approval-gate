@@ -48,6 +48,7 @@
         "approval.decided",
         "approval.expired",
         "approval.cancelled",
+        "approval.revoked",
         "resolution.emitted",
         "resolution.acknowledged",
         "authority.checked",

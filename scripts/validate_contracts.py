@@ -574,6 +574,40 @@ def policy_outcome_errors(
     return errors
 
 
+def revocation_errors(
+    request: dict[str, Any], decision: dict[str, Any] | None, events: list[dict[str, Any]]
+) -> list[str]:
+    """A revocation withdraws a recorded approval before consumption, never after."""
+    errors: list[str] = []
+    revocation = request["revocation"]
+    revoked_at = parse_time(revocation["revoked_at"])
+    if not decision or decision["decision"] not in {"approved", "auto_approved"}:
+        errors.append("revoked request lacks an approving decision")
+    else:
+        if revoked_at < parse_time(decision["recorded_at"]):
+            errors.append("revocation predates the approval it withdraws")
+        if request["revision"] < decision["request_revision"] + 2:
+            errors.append("revoked request lacks decision and revocation revisions")
+    if revoked_at >= parse_time(request["expires_at"]):
+        errors.append("revocation occurred at or after request expiry")
+    if parse_time(request["terminal_at"]) != revoked_at:
+        errors.append("revoked request terminal_at disagrees with revocation time")
+    witnesses = [event for event in events if event["event_type"] == "approval.revoked"]
+    if len(witnesses) > 1:
+        errors.append("audit stream records more than one revocation")
+    for event in witnesses:
+        if event["references"].get("request_id") != request["request_id"]:
+            errors.append("audit approval.revoked lacks its request_id witness")
+        if parse_time(event["occurred_at"]) != revoked_at:
+            errors.append("audit revocation time disagrees with request")
+        actor = revocation["revoked_by"]
+        if (event["actor"]["kind"], event["actor"]["identifier"]) != (actor["kind"], actor["identifier"]):
+            errors.append("audit revocation actor disagrees with request")
+        if event["detail"].get("reason_code", revocation["reason_code"]) != revocation["reason_code"]:
+            errors.append("audit revocation reason disagrees with request")
+    return errors
+
+
 def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | None = None) -> list[str]:
     errors: list[str] = []
     proposal = envelope["proposal"]
@@ -597,7 +631,7 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
     invokes_provider = any(item["status"] in invocation_statuses for item in dispatches)
     if invokes_provider and request["status"] != "consumed":
         errors.append("provider invocation requires a consumed request")
-    if request["status"] in {"rejected", "expired", "cancelled", "failed"} and invokes_provider:
+    if request["status"] in {"rejected", "expired", "cancelled", "failed", "revoked"} and invokes_provider:
         errors.append("refused request cannot invoke a provider")
 
     initial_action_hash = digest(proposal)
@@ -1072,6 +1106,8 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
         errors.append("rejected request lacks a rejecting decision")
     if request["status"] == "expired" and terminal_at and terminal_at < request_expires_at:
         errors.append("expired request terminated before its expiry")
+    if request["status"] == "revoked":
+        errors.extend(revocation_errors(request, decision_record, events))
     if request["status"] == "consumed":
         if request["decision_record_id"] not in approval_ids:
             errors.append("consumed request does not name an approving decision")
@@ -1165,6 +1201,8 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
         required_event_types.add("approval.expired")
     if request["status"] == "cancelled":
         required_event_types.add("approval.cancelled")
+    if request["status"] == "revoked":
+        required_event_types.add("approval.revoked")
     missing_event_types = sorted(required_event_types - event_types)
     if missing_event_types:
         errors.append(
