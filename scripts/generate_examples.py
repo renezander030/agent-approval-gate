@@ -93,7 +93,12 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     approval = rejected["approvals"][0]
     approval.update(decision="rejected", rejection_settlement={"state": "unresolved"})
     resolution = rejected["resolutions"][0]
-    resolution.update(decision="rejected", disposition="do_not_execute", retry_policy="never", approval_record_hash=digest_value(approval))
+    resolution.update(decision="rejected", disposition="revise_and_resubmit", retry_policy="new_proposal", approval_record_hash=digest_value(approval))
+    resolution["agent_feedback"] = {
+        "reason_code": "incorrect_content",
+        "message": "The reply promises a restore date that engineering has not confirmed.",
+        "requested_changes": [{"path": "/payload/body_text", "note": "Remove the restore date and link the status page instead."}],
+    }
     rejected["authority_snapshots"] = []
     dispatch = rejected["dispatches"][0]
     dispatch.update(status="not_dispatched", approval_ids=[], reason="approval_rejected")
@@ -103,6 +108,8 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     for event in rejected["audit_events"]:
         if event["event_type"] in {"approval.decided", "resolution.emitted"}:
             event["detail"]["decision"] = "rejected"
+        if event["event_type"] == "resolution.emitted":
+            event["detail"]["reason_code"] = resolution["agent_feedback"]["reason_code"]
         if event["event_type"] == "dispatch.succeeded":
             event["event_type"] = "dispatch.not_dispatched"
             event["detail"] = {"action_hash": dispatch["action_hash"], "reason_code": "approval_rejected"}
@@ -124,6 +131,33 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     expired["captured_at"] = expired["audit_snapshot"]["captured_at"] = expiry
     refresh_audit(expired)
     write("expired-envelope.json", expired)
+
+    revoked = deepcopy(base)
+    revoked_at = "2026-04-28T09:14:34Z"
+    request = revoked["request"]
+    request.update(status="revoked", revision=3, terminal_at=revoked_at, terminal_reason="approval_revoked")
+    request.pop("consumed_at")
+    request.pop("dispatch_id")
+    revoker = deepcopy(revoked["approvals"][0]["decided_by"])
+    request["revocation"] = {"revoked_at": revoked_at, "revoked_by": revoker, "reason_code": "target_changed", "safe_detail": "Customer replied on another thread before dispatch"}
+    revoked["authority_snapshots"] = []
+    dispatch = revoked["dispatches"][0]
+    dispatch.update(status="not_dispatched", approval_ids=[], reason="approval_revoked", started_at="2026-04-28T09:14:35Z", completed_at="2026-04-28T09:14:35Z", recorded_at="2026-04-28T09:14:35Z")
+    dispatch.pop("authority_snapshot_id")
+    dispatch.pop("provider")
+    events = [e for e in revoked["audit_events"] if e["event_type"] != "authority.checked"]
+    revocation_event = deepcopy(next(e for e in events if e["event_type"] == "approval.decided"))
+    revocation_event.update(event_id="event_revoked_01", event_type="approval.revoked", occurred_at=revoked_at, recorded_at=revoked_at, actor=deepcopy(revoker), references={"request_id": request["request_id"]}, detail={"reason_code": "target_changed"})
+    for event in events:
+        if event["event_type"] == "dispatch.succeeded":
+            event.update(event_type="dispatch.not_dispatched", occurred_at=dispatch["completed_at"], recorded_at=dispatch["recorded_at"])
+            event["references"].pop("approval_id")
+            event["detail"] = {"action_hash": dispatch["action_hash"], "reason_code": "approval_revoked"}
+    index = next(i for i, e in enumerate(events) if e["event_type"] == "dispatch.not_dispatched")
+    events.insert(index, revocation_event)
+    revoked["audit_events"] = events
+    refresh_audit(revoked)
+    write("revoked-envelope.json", revoked)
 
     recovered = deepcopy(base)
     first = recovered["dispatches"][0]
@@ -311,7 +345,7 @@ def main() -> None:
     write("audit-snapshot.json", audit_snapshot)
 
     envelope = {
-        "schema_version": "3.0.0",
+        "schema_version": "3.1.0",
         "captured_at": "2026-04-28T09:14:35Z",
         "proposal": proposal,
         "validations": [validation],

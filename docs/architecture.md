@@ -238,6 +238,7 @@ path without a fabricated approval or invocation. See the version 3 boundary rul
 | Telegram | Medium | Very low | Sign high-risk records and bind callback nonce |
 | Email | Low | High | Sign high-risk records; resist forwarding and replay |
 | n8n form | Medium | Low | Keep the request identity and callback validation outside the form fields |
+| MCP elicitation | Medium | Very low | Form-mode clients only; a client auto-decline is not a human rejection ([profile](mcp-elicitation.md)) |
 | Policy | Machine | Very low | Allowed only when the immutable policy snapshot permits auto approval |
 
 A UI control that an automation-capable agent can click is not, by itself, a human

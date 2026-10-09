@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.0.0/schemas/approval-request.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/approval-request.schema.json",
   "title": "ApprovalRequest",
   "description": "Durable state for one pending approval. Resolve it by request_id with compare-and-set semantics; never infer authority from payload shape or conversation text.",
   "type": "object",
@@ -38,7 +38,7 @@
     "expires_at": {"type": "string", "format": "date-time"},
     "status": {
       "type": "string",
-      "enum": ["pending", "approved", "rejected", "expired", "cancelled", "failed", "consumed"]
+      "enum": ["pending", "approved", "rejected", "expired", "cancelled", "failed", "consumed", "revoked"]
     },
     "revision": {"type": "integer", "minimum": 1},
     "requested_by": {"$ref": "common.schema.json#/$defs/actor"},
@@ -54,7 +54,7 @@
         "properties": {
           "channel": {
             "type": "string",
-            "enum": ["telegram", "slack", "email", "web", "n8n_form", "policy"]
+            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "policy"]
           },
           "target_hash": {"$ref": "common.schema.json#/$defs/digest"},
           "delivery_status": {
@@ -85,8 +85,31 @@
         "callback_invalid",
         "policy_failed",
         "delivery_failed",
-        "consumed_for_dispatch"
+        "consumed_for_dispatch",
+        "approval_revoked"
       ]
+    },
+    "revocation": {
+      "description": "Withdrawal of an approved, unconsumed request. A conditional transition from approved to revoked must fail when the request was already consumed.",
+      "type": "object",
+      "required": ["revoked_at", "revoked_by", "reason_code"],
+      "additionalProperties": false,
+      "properties": {
+        "revoked_at": {"type": "string", "format": "date-time"},
+        "revoked_by": {"$ref": "common.schema.json#/$defs/actor"},
+        "reason_code": {
+          "type": "string",
+          "enum": [
+            "approver_withdrew",
+            "authority_changed",
+            "policy_changed",
+            "target_changed",
+            "superseded",
+            "security_hold"
+          ]
+        },
+        "safe_detail": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 500}
+      }
     }
   },
   "allOf": [
@@ -178,6 +201,20 @@
           ]
         }
       }
+    },
+    {
+      "if": {"properties": {"status": {"const": "revoked"}}, "required": ["status"]},
+      "then": {
+        "required": ["terminal_at", "terminal_reason", "decision_record_id", "revocation"],
+        "properties": {"terminal_reason": {"const": "approval_revoked"}},
+        "not": {
+          "anyOf": [
+            {"required": ["consumed_at"]},
+            {"required": ["dispatch_id"]}
+          ]
+        }
+      },
+      "else": {"not": {"required": ["revocation"]}}
     },
     {
       "if": {"properties": {"status": {"const": "consumed"}}, "required": ["status"]},

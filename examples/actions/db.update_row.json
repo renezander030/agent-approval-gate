@@ -1,0 +1,7 @@
+{
+  "database": "billing",
+  "table": "public.invoices",
+  "key": {"invoice_id": "INV-2026-04-1182"},
+  "expected_version": 7,
+  "set": {"status": "void", "void_reason": "duplicate"}
+}

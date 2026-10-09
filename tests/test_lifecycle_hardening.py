@@ -27,7 +27,7 @@ class LifecycleHardeningTests(unittest.TestCase):
         self.assertTrue(any(reason in error for error in errors), errors)
 
     def test_positive_terminal_and_recovery_lifecycles(self) -> None:
-        for name in ("approval", "edited", "rejected", "expired", "recovered"):
+        for name in ("approval", "edited", "rejected", "expired", "recovered", "revoked"):
             with self.subTest(name=name):
                 self.assertEqual(validate_envelope(load(f"examples/{name}-envelope.json")), [])
 
@@ -351,7 +351,7 @@ class LifecycleHardeningTests(unittest.TestCase):
         self.assertEqual(self.envelope["proposal"], original)
 
     def test_malformed_envelope_fails_closed(self) -> None:
-        for value in (None, [], {}, {"proposal":{}}, {"schema_version":"3.0.0"}):
+        for value in (None, [], {}, {"proposal":{}}, {"schema_version":"3.1.0"}):
             self.assertEqual(validate_envelope(value), ["envelope fails structural validation"])
 
 

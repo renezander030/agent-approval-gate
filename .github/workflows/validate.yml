@@ -23,3 +23,17 @@ jobs:
       - run: python scripts/generate_examples.py
       - run: git diff --exit-code -- examples
       - run: python -m unittest discover -s tests -v
+
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          envelopes: |
+            examples/approval-envelope.json
+          records: |
+            approval-record examples/webauthn-approval-record.json
+            resolution-record examples/resolution-record.json
+          audit-events: examples/audit-events.json
+          audit-snapshot: examples/audit-snapshot.json

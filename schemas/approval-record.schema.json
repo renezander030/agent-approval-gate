@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.0.0/schemas/approval-record.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/approval-record.schema.json",
   "title": "ApprovalRecord",
   "description": "An append-only terminal decision bound to the exact effective action and payload reviewed by the approver.",
   "type": "object",
@@ -41,7 +41,7 @@
     "recorded_at": {"type": "string", "format": "date-time"},
     "channel": {
       "type": "string",
-      "enum": ["telegram", "slack", "email", "web", "n8n_form", "policy"]
+      "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "policy"]
     },
     "comment": {"type": "string", "maxLength": 2000},
     "modifications": {
@@ -174,7 +174,7 @@
             "required": ["authentication"]
           },
           "channel": {
-            "enum": ["telegram", "slack", "email", "web", "n8n_form"]
+            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation"]
           }
         }
       }
@@ -214,6 +214,32 @@
     {
       "if": {"required": ["modifications"]},
       "then": {"properties": {"decision": {"const": "approved"}}}
+    },
+    {
+      "if": {
+        "properties": {
+          "channel": {"const": "mcp_elicitation"},
+          "decision": {"enum": ["approved", "rejected"]}
+        },
+        "required": ["channel", "decision"]
+      },
+      "then": {
+        "properties": {
+          "decided_by": {
+            "properties": {
+              "kind": {"const": "human"},
+              "authentication": {
+                "properties": {
+                  "method": {"enum": ["authenticated_session", "channel_identity", "signed_callback"]},
+                  "human_present": {"const": true}
+                },
+                "required": ["method", "human_present"]
+              }
+            },
+            "required": ["kind", "authentication"]
+          }
+        }
+      }
     },
     {
       "if": {

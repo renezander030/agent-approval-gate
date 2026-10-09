@@ -356,15 +356,36 @@ def canonicalization_errors() -> list[str]:
     return errors
 
 
-def payload_errors(action: dict[str, Any], schema_files: dict[str, Path] | None = None) -> list[str]:
-    """Use locally supplied released bytes; never resolve an agent-selected URL."""
-    if "payload" not in action:
-        return ["effective action has no payload"]
+def payload_schema_files(schema_files: dict[str, Path] | None = None) -> dict[str, Path]:
     files = {
         load(path)["$id"]: path
         for path in (ROOT / "schemas" / "actions").glob("*.json")
     }
     files.update(schema_files or {})
+    return files
+
+
+def review_target_fields(
+    action: dict[str, Any], schema_files: dict[str, Path] | None = None
+) -> list[str] | None:
+    """Payload members the approver must see as the target, from the trusted schema."""
+    path = payload_schema_files(schema_files).get(action["payload_schema"]["id"])
+    if path is None:
+        return None
+    try:
+        fields = load(path).get("x-review-target")
+    except (OSError, ValueError):
+        return None
+    if not isinstance(fields, list) or not all(isinstance(item, str) for item in fields):
+        return None
+    return fields
+
+
+def payload_errors(action: dict[str, Any], schema_files: dict[str, Path] | None = None) -> list[str]:
+    """Use locally supplied released bytes; never resolve an agent-selected URL."""
+    if "payload" not in action:
+        return ["effective action has no payload"]
+    files = payload_schema_files(schema_files)
     binding = action["payload_schema"]
     path = files.get(binding["id"])
     if path is None:
@@ -501,6 +522,10 @@ def audit_binding_errors(envelope: dict[str, Any]) -> list[str]:
             errors.append("audit validation outcome disagrees with validation record")
         if event_type == "validation.rejected" and primary["outcome"] == "passed":
             errors.append("audit validation outcome disagrees with validation record")
+        if event_type == "resolution.emitted" and "reason_code" in detail:
+            feedback = primary.get("agent_feedback")
+            if not feedback or feedback["reason_code"] != detail["reason_code"]:
+                errors.append("audit resolution reason disagrees with agent feedback")
         if event_type == "review.presented" and "review_content_hash" in detail and detail["review_content_hash"] != primary["content_hash"]:
             errors.append("audit review content hash disagrees with snapshot")
         if event_type == "approval.decided":
@@ -534,6 +559,59 @@ def audit_binding_errors(envelope: dict[str, Any]) -> list[str]:
     return errors
 
 
+def policy_outcome_errors(
+    request: dict[str, Any], approvals: list[dict[str, Any]], dispatches: list[dict[str, Any]]
+) -> list[str]:
+    """Only an explicit, closed policy outcome may select an approval path."""
+    errors: list[str] = []
+    outcome = request["policy"].get("outcome")
+    auto_approvals = [item for item in approvals if item["decision"] == "auto_approved"]
+    if auto_approvals and outcome != "auto_approve":
+        errors.append("auto approval requires an explicit auto_approve policy outcome")
+    if outcome == "deny":
+        if request["status"] != "failed" or request.get("terminal_reason") != "policy_failed":
+            errors.append("denied policy outcome must end the request as policy_failed")
+        if any(item["decision"] in {"approved", "auto_approved"} for item in approvals):
+            errors.append("denied policy outcome cannot carry an approving decision")
+        if any(item["status"] != "not_dispatched" for item in dispatches):
+            errors.append("denied policy outcome cannot invoke a provider")
+    return errors
+
+
+def revocation_errors(
+    request: dict[str, Any], decision: dict[str, Any] | None, events: list[dict[str, Any]]
+) -> list[str]:
+    """A revocation withdraws a recorded approval before consumption, never after."""
+    errors: list[str] = []
+    revocation = request["revocation"]
+    revoked_at = parse_time(revocation["revoked_at"])
+    if not decision or decision["decision"] not in {"approved", "auto_approved"}:
+        errors.append("revoked request lacks an approving decision")
+    else:
+        if revoked_at < parse_time(decision["recorded_at"]):
+            errors.append("revocation predates the approval it withdraws")
+        if request["revision"] < decision["request_revision"] + 2:
+            errors.append("revoked request lacks decision and revocation revisions")
+    if revoked_at >= parse_time(request["expires_at"]):
+        errors.append("revocation occurred at or after request expiry")
+    if parse_time(request["terminal_at"]) != revoked_at:
+        errors.append("revoked request terminal_at disagrees with revocation time")
+    witnesses = [event for event in events if event["event_type"] == "approval.revoked"]
+    if len(witnesses) > 1:
+        errors.append("audit stream records more than one revocation")
+    for event in witnesses:
+        if event["references"].get("request_id") != request["request_id"]:
+            errors.append("audit approval.revoked lacks its request_id witness")
+        if parse_time(event["occurred_at"]) != revoked_at:
+            errors.append("audit revocation time disagrees with request")
+        actor = revocation["revoked_by"]
+        if (event["actor"]["kind"], event["actor"]["identifier"]) != (actor["kind"], actor["identifier"]):
+            errors.append("audit revocation actor disagrees with request")
+        if event["detail"].get("reason_code", revocation["reason_code"]) != revocation["reason_code"]:
+            errors.append("audit revocation reason disagrees with request")
+    return errors
+
+
 def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | None = None) -> list[str]:
     errors: list[str] = []
     proposal = envelope["proposal"]
@@ -557,7 +635,7 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
     invokes_provider = any(item["status"] in invocation_statuses for item in dispatches)
     if invokes_provider and request["status"] != "consumed":
         errors.append("provider invocation requires a consumed request")
-    if request["status"] in {"rejected", "expired", "cancelled", "failed"} and invokes_provider:
+    if request["status"] in {"rejected", "expired", "cancelled", "failed", "revoked"} and invokes_provider:
         errors.append("refused request cannot invoke a provider")
 
     initial_action_hash = digest(proposal)
@@ -666,15 +744,15 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
             errors.append(f"review snapshot {snapshot['snapshot_id']} predates proposal")
         if rendered_at > request_expires_at:
             errors.append(f"review snapshot {snapshot['snapshot_id']} was rendered after expiry")
-        if proposal["action_type"] == "email.send":
+        target_fields = review_target_fields(proposal, schema_files)
+        arguments = snapshot["content"]["arguments"]
+        if target_fields is not None and isinstance(arguments, dict):
             expected_target = {
-                key: snapshot["content"]["arguments"][key]
-                for key in ("from", "to", "cc")
-                if key in snapshot["content"]["arguments"]
+                key: arguments[key] for key in target_fields if key in arguments
             }
             if snapshot["content"]["target"] != expected_target:
                 errors.append(
-                    f"review snapshot {snapshot['snapshot_id']} changes the email target"
+                    f"review snapshot {snapshot['snapshot_id']} changes the {proposal['action_type']} target"
                 )
 
     initial_snapshot = snapshot_by_id.get(request["review_snapshot_id"])
@@ -768,6 +846,7 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
                 errors.append(f"approval {approval['approval_id']} was decided after expiry")
 
     requirements = request["policy"]["requirements"]
+    errors.extend(policy_outcome_errors(request, approvals, dispatches))
     if request["status"] in {"approved", "consumed"} and len(approved_records) < requirements["minimum_approvals"]:
         errors.append("approval quorum is not satisfied")
     if requirements["distinct_approvers"]:
@@ -790,6 +869,12 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
         hop["agent"]["identity"] for hop in proposal["delegation_chain"]
     }
     observed_signing_keys: set[str] = set()
+    delivered_channels = {
+        item["channel"] for item in request["channels"] if item["delivery_status"] == "delivered"
+    }
+    for approval in approvals:
+        if approval["channel"] == "mcp_elicitation" and "mcp_elicitation" not in delivered_channels:
+            errors.append(f"approval {approval['approval_id']} answers an elicitation that was never delivered")
     for approval in approved_records:
         approver_id = approval["decided_by"]["identifier"]
         if approval["channel"] not in allowed_channels:
@@ -1031,6 +1116,8 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
         errors.append("rejected request lacks a rejecting decision")
     if request["status"] == "expired" and terminal_at and terminal_at < request_expires_at:
         errors.append("expired request terminated before its expiry")
+    if request["status"] == "revoked":
+        errors.extend(revocation_errors(request, decision_record, events))
     if request["status"] == "consumed":
         if request["decision_record_id"] not in approval_ids:
             errors.append("consumed request does not name an approving decision")
@@ -1124,6 +1211,8 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
         required_event_types.add("approval.expired")
     if request["status"] == "cancelled":
         required_event_types.add("approval.cancelled")
+    if request["status"] == "revoked":
+        required_event_types.add("approval.revoked")
     missing_event_types = sorted(required_event_types - event_types)
     if missing_event_types:
         errors.append(
@@ -1265,7 +1354,7 @@ def validate_repository() -> list[str]:
         if "/main/" in identifier:
             failures.append(f"{path}: $id points at mutable main")
 
-    for corpus_path in ("tests/conformance.json", "tests/adversarial.json", "tests/hardening.json"):
+    for corpus_path in ("tests/conformance.json", "tests/adversarial.json", "tests/hardening.json", "tests/release-3.1.json"):
         corpus = load(corpus_path)
         for vector in corpus["positive"]:
             validator = validator_for(vector["schema"], schemas, registry)
@@ -1328,21 +1417,205 @@ def validate_repository() -> list[str]:
     return failures
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--quiet", action="store_true")
-    args = parser.parse_args()
+RECORD_SCHEMAS = {
+    path.name.removesuffix(".schema.json"): f"schemas/{path.name}"
+    for path in sorted((ROOT / "schemas").glob("*.schema.json"))
+    if path.name not in {"common.schema.json", "approval-envelope.schema.json"}
+}
+
+
+def record_errors(kind: str, record: Any) -> list[str]:
+    """Structural validation of one standalone record, plus its own proof when present."""
+    schemas, registry = schema_catalog()
+    validator = validator_for(RECORD_SCHEMAS[kind], schemas, registry)
+    errors = []
+    for error in sorted(validator.iter_errors(record), key=lambda item: list(item.path)):
+        location = "/".join(str(part) for part in error.path) or "<root>"
+        errors.append(f"{location}: {error.message}")
+    if not errors and kind == "approval-record":
+        errors.extend(webauthn_signature_errors(record))
+    return errors
+
+
+def audit_export_errors(
+    events: Any, snapshot: Any, anchor: str | None = None
+) -> list[str]:
+    """Verify an exported event range against its AuditSnapshot without the lifecycle records."""
+    schemas, registry = schema_catalog()
+    if not isinstance(events, list) or not events:
+        return ["audit export must be a non-empty event array"]
+    errors = [
+        f"audit snapshot: {error.message}"
+        for error in validator_for("schemas/audit-snapshot.schema.json", schemas, registry).iter_errors(snapshot)
+    ]
+    event_validator = validator_for("schemas/audit-event.schema.json", schemas, registry)
+    for index, event in enumerate(events):
+        if list(event_validator.iter_errors(event)):
+            errors.append(f"audit event {index} fails structural validation")
+    if errors:
+        return errors
+    first = events[0]
+    if first["sequence"] == 1:
+        if first["previous_event_hash"] is not None:
+            errors.append("first audit event of a stream cannot have a previous hash")
+    elif first["previous_event_hash"] is None:
+        errors.append("partial audit export does not name the preceding event hash")
+    if anchor is not None and first["previous_event_hash"] != anchor:
+        errors.append("audit export does not continue from the retained checkpoint")
+    expected_previous = first["previous_event_hash"]
+    previous_recorded_at: datetime | None = None
+    event_ids: set[str] = set()
+    for offset, event in enumerate(events):
+        if event["event_id"] in event_ids:
+            errors.append("audit events reuse event_id")
+        event_ids.add(event["event_id"])
+        if event["stream_id"] != snapshot["stream_id"]:
+            errors.append(f"audit event {event['event_id']} belongs to another stream")
+        if event["sequence"] != first["sequence"] + offset:
+            errors.append("audit sequence is not contiguous")
+        if event["previous_event_hash"] != expected_previous:
+            errors.append(f"audit event {event['event_id']} has a broken previous hash")
+        if event["event_hash"] != digest({key: value for key, value in event.items() if key != "event_hash"}):
+            errors.append(f"audit event {event['event_id']} hash mismatch")
+        recorded_at = parse_time(event["recorded_at"])
+        if recorded_at < parse_time(event["occurred_at"]):
+            errors.append(f"audit event {event['event_id']} was recorded before it occurred")
+        if previous_recorded_at and recorded_at < previous_recorded_at:
+            errors.append("audit event recording times are not monotonic")
+        expected_previous = event["event_hash"]
+        previous_recorded_at = recorded_at
+    if snapshot["entry_count"] != len(events):
+        errors.append("audit snapshot entry_count is incomplete")
+    if snapshot["first_sequence"] != first["sequence"]:
+        errors.append("audit snapshot first_sequence mismatch")
+    if snapshot["last_sequence"] != events[-1]["sequence"]:
+        errors.append("audit snapshot last_sequence mismatch")
+    if snapshot["events_digest"] != digest(events):
+        errors.append("audit snapshot events_digest mismatch")
+    if snapshot["root_event_hash"] != events[-1]["event_hash"]:
+        errors.append("audit snapshot root_event_hash mismatch")
+    if parse_time(snapshot["captured_at"]) < parse_time(events[-1]["recorded_at"]):
+        errors.append("audit snapshot predates its final event")
+    return errors
+
+
+def collection_errors(envelopes: list[dict[str, Any]]) -> list[str]:
+    """Identities that must stay unique across every lifecycle a deployment admitted."""
+    errors: list[str] = []
+    seen: dict[str, dict[Any, int]] = {
+        "proposal_id": {}, "request_id": {}, "call": {}, "dispatch_id": {}, "audit_stream": {},
+    }
+    idempotency: dict[tuple[str, str], tuple[int, str]] = {}
+
+    def claim(kind: str, key: Any, index: int, message: str) -> None:
+        if key in seen[kind] and seen[kind][key] != index:
+            errors.append(f"envelopes {seen[kind][key]} and {index}: {message}")
+        seen[kind].setdefault(key, index)
+
+    for index, envelope in enumerate(envelopes):
+        proposal, request = envelope["proposal"], envelope["request"]
+        claim("proposal_id", proposal["proposal_id"], index, "reuse proposal_id")
+        claim("request_id", request["request_id"], index, "reuse request_id")
+        claim("call", (proposal["tenant"], proposal["call_id"]), index, "admit more than one approval request for one call")
+        claim("audit_stream", envelope["audit_snapshot"]["stream_id"], index, "share one audit stream")
+        for dispatch in envelope["dispatches"]:
+            claim("dispatch_id", dispatch["dispatch_id"], index, "reuse dispatch_id")
+        key = (proposal["tenant"], proposal["idempotency_key"])
+        action_hash = digest(proposal)
+        if key in idempotency and idempotency[key][1] != action_hash:
+            errors.append(f"envelopes {idempotency[key][0]} and {index}: idempotency_key binds two different actions")
+        idempotency.setdefault(key, (index, action_hash))
+    return errors
+
+
+def read_json_input(path: str) -> Any:
+    text = Path(path).read_text(encoding="utf-8")
+    if path.endswith(".jsonl"):
+        return [strict_json_loads(line) for line in text.splitlines() if line.strip()]
+    return strict_json_loads(text)
+
+
+def trusted_schema_files(paths: list[str]) -> dict[str, Path]:
+    files: dict[str, Path] = {}
+    for path in paths:
+        schema = read_json_input(path)
+        if not isinstance(schema, dict) or not isinstance(schema.get("$id"), str):
+            raise ValueError(f"{path}: payload schema has no $id")
+        files[schema["$id"]] = Path(path).resolve()
+    return files
+
+
+def validate_inputs(args: argparse.Namespace) -> list[tuple[str, list[str]]]:
+    results: list[tuple[str, list[str]]] = []
+    schema_files = trusted_schema_files(args.schema_file)
+    envelopes: list[dict[str, Any]] = []
+    for path in args.envelope:
+        envelope = read_json_input(path)
+        errors = validate_envelope(envelope, schema_files)
+        results.append((path, errors))
+        if not errors:
+            envelopes.append(envelope)
+    if len(args.envelope) > 1:
+        results.append(("<envelope set>", collection_errors(envelopes)))
+    for kind, path in args.record:
+        if kind not in RECORD_SCHEMAS:
+            raise ValueError(f"unknown record kind {kind}; expected one of: {', '.join(RECORD_SCHEMAS)}")
+        results.append((path, record_errors(kind, read_json_input(path))))
+    if args.audit_events or args.audit_snapshot:
+        if not (args.audit_events and args.audit_snapshot):
+            raise ValueError("--audit-events and --audit-snapshot must be given together")
+        results.append((
+            args.audit_events,
+            audit_export_errors(read_json_input(args.audit_events), read_json_input(args.audit_snapshot), args.anchor),
+        ))
+    return results
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Validate this repository's contracts, or your own approval records against them.",
+    )
+    parser.add_argument("--quiet", action="store_true", help="print nothing on success")
+    parser.add_argument("--json", action="store_true", help="print one JSON result object")
+    parser.add_argument("--envelope", action="append", default=[], metavar="FILE",
+                        help="complete approval envelope; repeat to also check identities across envelopes")
+    parser.add_argument("--record", action="append", nargs=2, default=[], metavar=("KIND", "FILE"),
+                        help="one standalone record, e.g. approval-record path.json")
+    parser.add_argument("--schema-file", action="append", default=[], metavar="FILE",
+                        help="trusted local payload schema for a custom action type")
+    parser.add_argument("--audit-events", metavar="FILE", help="exported audit events (.json array or .jsonl)")
+    parser.add_argument("--audit-snapshot", metavar="FILE", help="AuditSnapshot manifest for the exported events")
+    parser.add_argument("--anchor", metavar="SHA256", help="retained hash of the event preceding a partial export")
+    args = parser.parse_args(argv)
+    user_mode = bool(args.envelope or args.record or args.audit_events or args.audit_snapshot)
     try:
-        failures = validate_repository()
-    except (ValueError, TypeError, KeyError, IndexError, rfc8785.CanonicalizationError):
-        failures = ["contract input could not be validated"]
-    if failures:
-        for failure in failures:
-            print(f"FAIL: {failure}")
-        return 1
-    if not args.quiet:
-        print("All schemas, examples, negative vectors, and lifecycle invariants passed.")
-    return 0
+        results = validate_inputs(args) if user_mode else [("repository", validate_repository())]
+    except (OSError, ValueError) as error:
+        message = str(error) if user_mode else "contract input could not be validated"
+        if args.json:
+            print(json.dumps({"ok": False, "error": message}))
+        else:
+            print(f"ERROR: {message}")
+        return 2
+    except (TypeError, KeyError, IndexError, rfc8785.CanonicalizationError):
+        if args.json:
+            print(json.dumps({"ok": False, "error": "contract input could not be validated"}))
+        else:
+            print("ERROR: contract input could not be validated")
+        return 2
+    ok = not any(errors for _, errors in results)
+    if args.json:
+        print(json.dumps({"ok": ok, "results": [{"input": name, "errors": errors} for name, errors in results]}, indent=2))
+    else:
+        for name, errors in results:
+            for error in errors:
+                print(f"FAIL: {error}" if name == "repository" else f"FAIL: {name}: {error}")
+        if ok and not args.quiet:
+            print(
+                "All schemas, examples, negative vectors, and lifecycle invariants passed."
+                if not user_mode else f"All {len(results)} inputs passed."
+            )
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

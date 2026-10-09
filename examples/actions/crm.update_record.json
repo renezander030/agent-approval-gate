@@ -1,0 +1,10 @@
+{
+  "system": "hubspot",
+  "object_type": "Deal",
+  "record_id": "deal-48213",
+  "expected_version": "2026-04-28T09:02:11Z",
+  "changes": [
+    {"field": "dealstage", "from": "proposal_sent", "to": "contract_review"},
+    {"field": "next_step", "to": "Send the signed order form"}
+  ]
+}

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.0.0/schemas/proposed-action.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/proposed-action.schema.json",
   "title": "ProposedAction",
   "description": "An immutable, serializable action draft. The RFC 8785 SHA-256 digest of this complete document is the action_hash carried through approval and dispatch.",
   "type": "object",
@@ -84,6 +84,51 @@
       },
       "then": {
         "properties": {"payload": {"$ref": "actions/email.send.schema.json"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"action_type": {"const": "crm.update_record"}},
+        "required": ["action_type"]
+      },
+      "then": {
+        "properties": {"payload": {"$ref": "actions/crm.update_record.schema.json"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"action_type": {"const": "ticket.create"}},
+        "required": ["action_type"]
+      },
+      "then": {
+        "properties": {"payload": {"$ref": "actions/ticket.create.schema.json"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"action_type": {"const": "db.update_row"}},
+        "required": ["action_type"]
+      },
+      "then": {
+        "properties": {"payload": {"$ref": "actions/db.update_row.schema.json"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"action_type": {"const": "api.call"}},
+        "required": ["action_type"]
+      },
+      "then": {
+        "properties": {"payload": {"$ref": "actions/api.call.schema.json"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"action_type": {"const": "n8n.trigger_workflow"}},
+        "required": ["action_type"]
+      },
+      "then": {
+        "properties": {"payload": {"$ref": "actions/n8n.trigger_workflow.schema.json"}}
       }
     }
   ]

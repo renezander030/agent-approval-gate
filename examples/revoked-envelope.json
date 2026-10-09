@@ -149,8 +149,8 @@
     "callback_nonce_hash": "sha256:91eaf28be1fa8121d74d9ce65298da05363c70dfb691c4c4e1a17691bb09966a",
     "requested_at": "2026-04-28T09:14:25Z",
     "expires_at": "2026-04-28T17:14:23Z",
-    "status": "rejected",
-    "revision": 2,
+    "status": "revoked",
+    "revision": 3,
     "requested_by": {
       "kind": "system",
       "identifier": "approval-router",
@@ -211,9 +211,29 @@
         "sent_at": "2026-04-28T09:14:26Z"
       }
     ],
-    "terminal_at": "2026-04-28T09:14:31Z",
+    "terminal_at": "2026-04-28T09:14:34Z",
     "decision_record_id": "approval_2026-04-28_f9821000",
-    "terminal_reason": "rejected"
+    "terminal_reason": "approval_revoked",
+    "revocation": {
+      "revoked_at": "2026-04-28T09:14:34Z",
+      "revoked_by": {
+        "kind": "human",
+        "identifier": "rene@acme-corp.example",
+        "display_name": "Rene Z.",
+        "roles": [
+          "customer-support"
+        ],
+        "authentication": {
+          "method": "signed_callback",
+          "human_present": true,
+          "assurance": "substantial",
+          "authenticated_at": "2026-04-28T09:14:30Z",
+          "evidence_ref": "mail-callback:mail_2026-04-28_3391"
+        }
+      },
+      "reason_code": "target_changed",
+      "safe_detail": "Customer replied on another thread before dispatch"
+    }
   },
   "approvals": [
     {
@@ -226,7 +246,7 @@
       "payload_hash": "sha256:c919182dcf3aa49d95f5927636aeb7a6a227fa9f9b3daa7384ac4c531a9f891b",
       "review_snapshot_id": "review_2026-04-28_47b2c000",
       "review_content_hash": "sha256:1496a0bf99cb54f169a7deb5e57ec48be882f1859fbd39cc2014563d3a250636",
-      "decision": "rejected",
+      "decision": "approved",
       "decided_by": {
         "kind": "human",
         "identifier": "rene@acme-corp.example",
@@ -253,10 +273,7 @@
           "value": "H4f8GxQqI5kTMs7b4Y8cn2RlpdVLz0WGv8VUW0Sm5OU"
         }
       ],
-      "policy_evaluation_id": "eval_2026-04-28_1c4f8a00",
-      "rejection_settlement": {
-        "state": "unresolved"
-      }
+      "policy_evaluation_id": "eval_2026-04-28_1c4f8a00"
     }
   ],
   "resolutions": [
@@ -268,11 +285,11 @@
       "proposal_id": "prop_2026-04-28_b3f1a2c4",
       "call_id": "call_2026-04-28_7e19c5ad",
       "action_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b",
-      "approval_record_hash": "sha256:abec2cf7d95c29f2061519342329afa22f74c08df321b764677d90abe526896a",
-      "decision": "rejected",
+      "approval_record_hash": "sha256:d78fc9225b2cc30eb16571689b5a8f51f66cfffa0fb6e2364b6df998bb2c4ded",
+      "decision": "approved",
       "terminal": true,
-      "disposition": "revise_and_resubmit",
-      "retry_policy": "new_proposal",
+      "disposition": "execute_once",
+      "retry_policy": "delivery_only",
       "emitted_at": "2026-04-28T09:14:32Z",
       "delivery": {
         "target_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
@@ -280,16 +297,6 @@
         "status": "acknowledged",
         "last_attempt_at": "2026-04-28T09:14:32Z",
         "acknowledged_at": "2026-04-28T09:14:32Z"
-      },
-      "agent_feedback": {
-        "reason_code": "incorrect_content",
-        "message": "The reply promises a restore date that engineering has not confirmed.",
-        "requested_changes": [
-          {
-            "path": "/payload/body_text",
-            "note": "Remove the restore date and link the status page instead."
-          }
-        ]
       }
     }
   ],
@@ -307,10 +314,10 @@
       "max_attempts": 3,
       "status": "not_dispatched",
       "retry_allowed": false,
-      "started_at": "2026-04-28T09:14:33Z",
-      "completed_at": "2026-04-28T09:14:34Z",
-      "recorded_at": "2026-04-28T09:14:34Z",
-      "reason": "approval_rejected"
+      "started_at": "2026-04-28T09:14:35Z",
+      "completed_at": "2026-04-28T09:14:35Z",
+      "recorded_at": "2026-04-28T09:14:35Z",
+      "reason": "approval_revoked"
     }
   ],
   "audit_events": [
@@ -464,7 +471,7 @@
       "stream_id": "stream_prop_b3f1a2c4",
       "sequence": 5,
       "previous_event_hash": "sha256:0b7b9061103a019b39628e26b2aea2656bb73d28221f2be251b7e67783391379",
-      "event_hash": "sha256:cf57a31101130006a4cb79e762480e7ce804bfc5ace0cce51b8c88cf228bcadb",
+      "event_hash": "sha256:baf6f0634aebc6c94e8b9ef76f9c9da60e0513938fee83183de4662609e35d75",
       "event_type": "approval.decided",
       "occurred_at": "2026-04-28T09:14:30Z",
       "recorded_at": "2026-04-28T09:14:31Z",
@@ -495,7 +502,7 @@
         "policy_evaluation_id": "eval_2026-04-28_1c4f8a00"
       },
       "detail": {
-        "decision": "rejected",
+        "decision": "approved",
         "channel": "email",
         "action_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b",
         "payload_hash": "sha256:c919182dcf3aa49d95f5927636aeb7a6a227fa9f9b3daa7384ac4c531a9f891b",
@@ -508,8 +515,8 @@
       "event_id": "event_2026-04-28_00000006",
       "stream_id": "stream_prop_b3f1a2c4",
       "sequence": 6,
-      "previous_event_hash": "sha256:cf57a31101130006a4cb79e762480e7ce804bfc5ace0cce51b8c88cf228bcadb",
-      "event_hash": "sha256:c9a007b389c54f19ddbee4e89ef5e4990aab60bb7d9231ec56f257b3f488cce5",
+      "previous_event_hash": "sha256:baf6f0634aebc6c94e8b9ef76f9c9da60e0513938fee83183de4662609e35d75",
+      "event_hash": "sha256:bf75da38290db5fb704e6b089a2eb5315097190d55bad35a156cc19ea33c453b",
       "event_type": "resolution.emitted",
       "occurred_at": "2026-04-28T09:14:32Z",
       "recorded_at": "2026-04-28T09:14:32Z",
@@ -537,21 +544,60 @@
         "resolution_id": "resolution_2026-04-28_78ac1000"
       },
       "detail": {
-        "decision": "rejected",
-        "action_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b",
-        "reason_code": "incorrect_content"
+        "decision": "approved",
+        "action_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b"
+      }
+    },
+    {
+      "schema_version": "3.1.0",
+      "event_id": "event_revoked_01",
+      "stream_id": "stream_prop_b3f1a2c4",
+      "sequence": 7,
+      "previous_event_hash": "sha256:bf75da38290db5fb704e6b089a2eb5315097190d55bad35a156cc19ea33c453b",
+      "event_hash": "sha256:f20d26a729f83f599b876c882c18d473241266554ae0e8ad9a460b420cc6f0a1",
+      "event_type": "approval.revoked",
+      "occurred_at": "2026-04-28T09:14:34Z",
+      "recorded_at": "2026-04-28T09:14:34Z",
+      "tenant": "acme-corp",
+      "proposal_id": "prop_2026-04-28_b3f1a2c4",
+      "actor": {
+        "kind": "human",
+        "identifier": "rene@acme-corp.example",
+        "display_name": "Rene Z.",
+        "roles": [
+          "customer-support"
+        ],
+        "authentication": {
+          "method": "signed_callback",
+          "human_present": true,
+          "assurance": "substantial",
+          "authenticated_at": "2026-04-28T09:14:30Z",
+          "evidence_ref": "mail-callback:mail_2026-04-28_3391"
+        }
+      },
+      "classification": "confidential",
+      "retention": {
+        "class": "standard",
+        "delete_after": "2027-04-28T09:14:31Z",
+        "legal_hold": false
+      },
+      "references": {
+        "request_id": "req_2026-04-28_6a2d8800"
+      },
+      "detail": {
+        "reason_code": "target_changed"
       }
     },
     {
       "schema_version": "3.1.0",
       "event_id": "event_2026-04-28_00000008",
       "stream_id": "stream_prop_b3f1a2c4",
-      "sequence": 7,
-      "previous_event_hash": "sha256:c9a007b389c54f19ddbee4e89ef5e4990aab60bb7d9231ec56f257b3f488cce5",
-      "event_hash": "sha256:31aa6536e160ab7bf7202f624146c0594df7e3ccf944fde1264e353c17448792",
+      "sequence": 8,
+      "previous_event_hash": "sha256:f20d26a729f83f599b876c882c18d473241266554ae0e8ad9a460b420cc6f0a1",
+      "event_hash": "sha256:3aecdaad166720e7fb0dc7c0f2af2fca16dc2e3705d72cfd26d54a382d8e2e96",
       "event_type": "dispatch.not_dispatched",
-      "occurred_at": "2026-04-28T09:14:34Z",
-      "recorded_at": "2026-04-28T09:14:34Z",
+      "occurred_at": "2026-04-28T09:14:35Z",
+      "recorded_at": "2026-04-28T09:14:35Z",
       "tenant": "acme-corp",
       "proposal_id": "prop_2026-04-28_b3f1a2c4",
       "actor": {
@@ -572,21 +618,20 @@
       },
       "references": {
         "request_id": "req_2026-04-28_6a2d8800",
-        "approval_id": "approval_2026-04-28_f9821000",
         "dispatch_id": "dispatch_2026-04-28_4ad31000"
       },
       "detail": {
         "action_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b",
-        "reason_code": "approval_rejected"
+        "reason_code": "approval_revoked"
       }
     },
     {
       "schema_version": "3.1.0",
       "event_id": "event_2026-04-28_00000009",
       "stream_id": "stream_prop_b3f1a2c4",
-      "sequence": 8,
-      "previous_event_hash": "sha256:31aa6536e160ab7bf7202f624146c0594df7e3ccf944fde1264e353c17448792",
-      "event_hash": "sha256:bdaa62480dbec230488998b2b096ed8f967451388cf5411cb160a878b9b3e81d",
+      "sequence": 9,
+      "previous_event_hash": "sha256:3aecdaad166720e7fb0dc7c0f2af2fca16dc2e3705d72cfd26d54a382d8e2e96",
+      "event_hash": "sha256:2a58d83546f9e3010d0df37805a6633857ae05dfdcb67b39bf37d6b38942089c",
       "event_type": "audit.snapshotted",
       "occurred_at": "2026-04-28T09:14:35Z",
       "recorded_at": "2026-04-28T09:14:35Z",
@@ -620,10 +665,10 @@
     "stream_id": "stream_prop_b3f1a2c4",
     "captured_at": "2026-04-28T09:14:35Z",
     "complete": true,
-    "entry_count": 8,
+    "entry_count": 9,
     "first_sequence": 1,
-    "last_sequence": 8,
-    "events_digest": "sha256:67fe3563617427f58cfec061d4fd70130f278bc5f2a34975b16a4579d0c12cd4",
-    "root_event_hash": "sha256:bdaa62480dbec230488998b2b096ed8f967451388cf5411cb160a878b9b3e81d"
+    "last_sequence": 9,
+    "events_digest": "sha256:8ad8bfec331fe34f475827e2832db57d422f5ff8df267c30f68778fa16c05aa4",
+    "root_event_hash": "sha256:2a58d83546f9e3010d0df37805a6633857ae05dfdcb67b39bf37d6b38942089c"
   }
 }

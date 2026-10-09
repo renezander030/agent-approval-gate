@@ -1,0 +1,9 @@
+{
+  "system": "jira",
+  "project": "SUP",
+  "title": "Invoice export fails for EU tenants",
+  "description": "Customer reports the April invoice export returns an empty file for EU tenants.",
+  "priority": "high",
+  "assignee": "billing-oncall",
+  "labels": ["billing", "customer-reported"]
+}

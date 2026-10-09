@@ -1,0 +1,204 @@
+{
+  "positive": [
+    {
+      "name": "revoked lifecycle",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/revoked-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "rejection with agent feedback",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/rejected-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "crm.update_record reference payload",
+      "schema": "schemas/actions/crm.update_record.schema.json",
+      "instance": "examples/actions/crm.update_record.json"
+    },
+    {
+      "name": "ticket.create reference payload",
+      "schema": "schemas/actions/ticket.create.schema.json",
+      "instance": "examples/actions/ticket.create.json"
+    },
+    {
+      "name": "db.update_row reference payload",
+      "schema": "schemas/actions/db.update_row.schema.json",
+      "instance": "examples/actions/db.update_row.json"
+    },
+    {
+      "name": "api.call reference payload",
+      "schema": "schemas/actions/api.call.schema.json",
+      "instance": "examples/actions/api.call.json"
+    },
+    {
+      "name": "n8n.trigger_workflow reference payload",
+      "schema": "schemas/actions/n8n.trigger_workflow.schema.json",
+      "instance": "examples/actions/n8n.trigger_workflow.json"
+    }
+  ],
+  "negative": [
+    {
+      "name": "policy outcome outside the closed set",
+      "schema": "schemas/approval-policy.schema.json",
+      "instance": "examples/approval-policy.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/outcome",
+          "value": "no_opinion"
+        }
+      ]
+    },
+    {
+      "name": "auto-approve outcome under a policy that forbids auto approval",
+      "schema": "schemas/approval-policy.schema.json",
+      "instance": "examples/approval-policy.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/outcome",
+          "value": "auto_approve"
+        }
+      ]
+    },
+    {
+      "name": "denied policy outcome reaches dispatch",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "expect_error": "denied policy outcome cannot invoke a provider",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/policy/outcome",
+          "value": "deny"
+        }
+      ]
+    },
+    {
+      "name": "revocation after expiry",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/revoked-envelope.json",
+      "expect": "semantic",
+      "expect_error": "revocation occurred at or after request expiry",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/revocation/revoked_at",
+          "value": "2026-04-28T17:14:23Z"
+        },
+        {
+          "op": "replace",
+          "path": "/request/terminal_at",
+          "value": "2026-04-28T17:14:23Z"
+        }
+      ]
+    },
+    {
+      "name": "consumed request carries a revocation",
+      "schema": "schemas/approval-request.schema.json",
+      "instance": "examples/approval-request.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "add",
+          "path": "/revocation",
+          "value": {
+            "revoked_at": "2026-04-28T09:14:34Z",
+            "revoked_by": {
+              "kind": "human",
+              "identifier": "rene@acme-corp.example",
+              "authentication": {
+                "method": "signed_callback",
+                "human_present": true,
+                "assurance": "substantial"
+              }
+            },
+            "reason_code": "approver_withdrew"
+          }
+        }
+      ]
+    },
+    {
+      "name": "agent feedback asks to change a field outside the payload",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/rejected-envelope.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/resolutions/0/agent_feedback/requested_changes/0/path",
+          "value": "/tenant"
+        }
+      ]
+    },
+    {
+      "name": "agent feedback on an approval",
+      "schema": "schemas/resolution-record.schema.json",
+      "instance": "examples/resolution-record.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "add",
+          "path": "/agent_feedback",
+          "value": {
+            "reason_code": "other",
+            "message": "Fine"
+          }
+        }
+      ]
+    },
+    {
+      "name": "elicitation rejection by a client without a present human",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/rejected-with-settlement-approval-record.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/channel",
+          "value": "mcp_elicitation"
+        },
+        {
+          "op": "replace",
+          "path": "/decided_by/kind",
+          "value": "system"
+        },
+        {
+          "op": "replace",
+          "path": "/decided_by/authentication/human_present",
+          "value": false
+        }
+      ]
+    },
+    {
+      "name": "crm update without an expected record version",
+      "schema": "schemas/actions/crm.update_record.schema.json",
+      "instance": "examples/actions/crm.update_record.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/expected_version"
+        }
+      ]
+    },
+    {
+      "name": "api call names a raw URL",
+      "schema": "schemas/actions/api.call.schema.json",
+      "instance": "examples/actions/api.call.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "add",
+          "path": "/url",
+          "value": "https://attacker.example/refund"
+        }
+      ]
+    }
+  ]
+}

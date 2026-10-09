@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.0.0/schemas/approval-policy.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/approval-policy.schema.json",
   "title": "ApprovalPolicySnapshot",
   "description": "Immutable evidence of the policy revision and material inputs that selected an approval path.",
   "type": "object",
@@ -23,6 +23,12 @@
     "evaluation_id": {"$ref": "common.schema.json#/$defs/identifier"},
     "material_input_hash": {"$ref": "common.schema.json#/$defs/digest"},
     "evaluated_at": {"type": "string", "format": "date-time"},
+    "outcome": {
+      "description": "The evaluator's closed decision for this action. Record any other evaluator result, including a non-boolean, unknown, or errored result, as deny.",
+      "type": "string",
+      "enum": ["require_approval", "auto_approve", "deny"]
+    },
+    "outcome_reason": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 500},
     "requirements": {
       "type": "object",
       "required": [
@@ -44,7 +50,7 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "enum": ["telegram", "slack", "email", "web", "n8n_form", "policy"]
+            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "policy"]
           }
         },
         "signature_required_channels": {
@@ -52,7 +58,7 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "enum": ["telegram", "slack", "email", "web", "n8n_form", "policy"]
+            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "policy"]
           }
         },
         "allow_auto_approval": {"type": "boolean"},
@@ -96,5 +102,15 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"const": "auto_approve"}}, "required": ["outcome"]},
+      "then": {
+        "properties": {
+          "requirements": {"properties": {"allow_auto_approval": {"const": true}}}
+        }
+      }
+    }
+  ]
 }

@@ -1,0 +1,5 @@
+{
+  "workflow_id": "wf-onboarding-01",
+  "workflow_version": "12",
+  "input": {"customer_id": "cus-2041", "plan": "team"}
+}
