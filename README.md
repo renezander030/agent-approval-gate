@@ -53,7 +53,7 @@ Nine boundaries make the gate real:
 If the agent still has the side-effect credential, the approval path remains optional
 from the agent's point of view.
 
-## Contracts in v3.0.0
+## Contracts in v3.1.0
 
 | Contract | Purpose |
 |---|---|
@@ -69,9 +69,9 @@ from the agent's point of view.
 | [`audit-event.schema.json`](schemas/audit-event.schema.json) | Redacted lifecycle evidence with actor, event time, ingestion time, and hash chain |
 | [`audit-snapshot.schema.json`](schemas/audit-snapshot.schema.json) | Completeness manifest for one exported audit-event set |
 | [`approval-envelope.schema.json`](schemas/approval-envelope.schema.json) | Portable bundle plus cross-contract profile for a completed lifecycle |
-| [`actions/email.send.schema.json`](schemas/actions/email.send.schema.json) | Strict reference for composing action-specific payload contracts |
+| [`actions/*.schema.json`](schemas/actions/) | Strict payload references for `email.send`, `crm.update_record`, `ticket.create`, `db.update_row`, `api.call`, and `n8n.trigger_workflow`, each naming the fields the approver must see as the target |
 
-Schema IDs are pinned to the `v3.0.0` release. Pin a released ID in production; do not
+Schema IDs are pinned to the `v3.1.0` release. Pin a released ID in production; do not
 resolve schemas from the mutable default branch.
 
 ## Quick start
@@ -108,11 +108,42 @@ Recovery retains the unknown attempt, a linked reconciliation record, and a boun
 retry with fresh authority. The portable vectors in
 [`tests/hardening.json`](tests/hardening.json) cover these boundaries.
 
+Version 3.1 adds a fail-closed policy outcome (`require_approval`, `auto_approve`, or
+`deny`; anything else is recorded as `deny`), [revocation](examples/revoked-envelope.json)
+of an approved request until the moment it is consumed, structured `agent_feedback` on
+refusals so the agent can revise instead of re-asking, an `mcp_elicitation` channel
+([profile](docs/mcp-elicitation.md)), and review-target binding for every action type.
+
 [`tests/canonicalization.json`](tests/canonicalization.json) is a language-neutral
 RFC 8785 corpus with exact canonical UTF-8 bytes and SHA-256 results. Use it to prove
 that implementations in different languages bind the same document to the same hash.
 [`tests/adversarial.json`](tests/adversarial.json) exercises deceptive identities,
 display controls, metadata injection, redaction boundaries, and review tampering.
+
+## Validate your own records
+
+The reference validator checks your envelopes, standalone records, and audit exports
+with the same rules it applies to this repository:
+
+```bash
+python3 scripts/validate_contracts.py --envelope out/envelope.json
+python3 scripts/validate_contracts.py --envelope a.json --envelope b.json
+python3 scripts/validate_contracts.py --record approval-record out/approval.json --json
+python3 scripts/validate_contracts.py --audit-events out/audit.jsonl --audit-snapshot out/snapshot.json
+```
+
+Several envelopes are also checked as a set: one approval request per call, and one
+action per idempotency key. Audit exports verify offline, including a range that
+continues from a retained checkpoint hash. In CI, use the bundled action:
+
+```yaml
+- uses: renezander030/agent-approval-gate@v3.1.0
+  with:
+    envelopes: out/envelope.json
+```
+
+See [`docs/contracts.md`](docs/contracts.md#validating-your-own-records) for every option
+and exit status.
 
 ## Optional passkey proof
 

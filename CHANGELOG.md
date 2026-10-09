@@ -1,5 +1,47 @@
 # Changelog
 
+## 3.1.0
+
+Approval paths that fail closed, approvals that can be withdrawn until dispatch, and
+records you can verify in your own pipeline.
+
+### Added
+
+- `ApprovalPolicySnapshot.outcome`: a closed `require_approval`, `auto_approve`, or
+  `deny` result. Auto approval requires an explicit `auto_approve` outcome under a
+  policy that allows it; a `deny` outcome ends the request as `policy_failed` and
+  never reaches a provider.
+- Revocation of an approved request before consumption: `revoked` status,
+  `approval_revoked` terminal and dispatch reasons, a `revocation` record with actor,
+  time, and reason, an `approval.revoked` audit event, and a complete
+  [revoked lifecycle](examples/revoked-envelope.json).
+- `ResolutionRecord.agent_feedback` for refusals: reason code, redacted message,
+  requested payload changes, and questions, returned with
+  `revise_and_resubmit` and `new_proposal`.
+- An `mcp_elicitation` approval channel with a [profile](docs/mcp-elicitation.md) for
+  MCP servers that collect decisions through form-mode elicitation. Approved and
+  rejected elicitation decisions name a present, authenticated human.
+- Strict reference payload schemas for `crm.update_record`, `ticket.create`,
+  `db.update_row`, `api.call`, and `n8n.trigger_workflow`, with example payloads.
+- `x-review-target` on action schemas: the review snapshot target must equal those
+  members of the reviewed arguments for every action type.
+- Validator inputs for your own files: `--envelope`, `--record KIND FILE`,
+  `--schema-file`, `--audit-events` with `--audit-snapshot` and `--anchor`, and
+  `--json`, with exit status 0, 1, or 2.
+- Set checks across envelopes: unique proposal, request, dispatch, and audit-stream
+  identities, one approval request per call, and one action per idempotency key.
+- Offline verification of exported audit ranges, including partial exports anchored
+  to a retained checkpoint hash.
+- A GitHub Action (`action.yml`) that runs the validator in any repository.
+- Portable conformance vectors in `tests/release-3.1.json`.
+
+### Compatibility
+
+Every addition is optional on existing records. Schema IDs and `schema_version` move
+to `3.1.0`; continue validating stored v3.0 records with the v3.0.0 schemas and do
+not relabel them. Records produced under 3.1 that use `email.send` must cite the
+v3.1.0 payload schema ID and digest.
+
 ## 3.0.0
 
 This release enforces the approval and execution boundaries across complete success,

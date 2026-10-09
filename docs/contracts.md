@@ -2,8 +2,8 @@
 
 ## Versioning
 
-The release version and every schema's `schema_version` are `3.0.0`. Schema `$id`
-values resolve through the immutable `v3.0.0` tag. A consumer may cache schemas by
+The release version and every schema's `schema_version` are `3.1.0`. Schema `$id`
+values resolve through the immutable `v3.1.0` tag. A consumer may cache schemas by
 `$id`; it must not replace a cached release schema with content from `main`.
 
 - Patch releases may clarify descriptions and add compatible examples or tests.
@@ -138,6 +138,60 @@ with the record. Decision actor and time agree with the approval; witness times 
 with the facts they record. Capturing the envelope cannot precede its contained
 evidence. Rehashing a false event never makes it a valid witness.
 
+## Version 3.1 additions
+
+### Policy outcome
+
+`ApprovalPolicySnapshot.outcome` records the evaluator's decision as exactly one of
+`require_approval`, `auto_approve`, or `deny`. Map every other evaluator result,
+including a non-boolean, missing, unknown, or errored result, to `deny` before writing
+the snapshot. Never treat "no opinion" as permission.
+
+- `auto_approve` requires `allow_auto_approval: true`, and every `auto_approved`
+  decision requires an explicit `auto_approve` outcome.
+- `deny` ends the request as `failed` with `terminal_reason: "policy_failed"`. It cannot
+  carry an approving decision or reach provider invocation.
+
+### Revocation before consumption
+
+An approved request may become `revoked` until it is consumed. The transition is a
+compare-and-set from `approved` to `revoked`; it must fail once consumption won.
+The request names the withdrawn decision in `decision_record_id` and records
+`revocation.revoked_at`, `revoked_by`, and a `reason_code`. Its revision includes both
+the decision and the revocation transition. Revocation must precede request expiry, an
+`approval.revoked` audit event must witness the same actor and time, and a revoked
+request cannot invoke a provider. A dispatcher that observes the revocation records
+`not_dispatched` with `reason: "approval_revoked"`. The approval record and its
+resolution receipt stay unchanged; a new action needs a new proposal.
+
+### Agent feedback
+
+A refusal resolution (`rejected`, `expired`, or `cancelled`) may carry
+`agent_feedback` with a closed `reason_code`, a redacted `message`, optional
+`requested_changes` (JSON Pointers inside `/payload` with a note), and optional
+`questions`. Requested changes or questions require
+`disposition: "revise_and_resubmit"` and `retry_policy: "new_proposal"`. Feedback
+informs the next proposal; it never reopens the decision or grants execution. When
+the `resolution.emitted` event carries a `reason_code`, it must equal the feedback
+reason.
+
+### Reference action catalog and review targets
+
+Every built-in `action_type` has a strict reference payload schema in
+`schemas/actions/`. Each schema names its action in `x-action-type` and the payload
+members the approver must see as the target in `x-review-target`. The validator
+requires `ReviewSnapshot.content.target` to equal exactly those members of the
+reviewed arguments, for built-in and trusted custom schemas alike. Deployments copy a
+schema next to their dispatcher, adapt it, publish it under an immutable ID, and pass
+it to the validator as a trusted local file.
+
+### Cross-envelope identities
+
+One envelope proves one lifecycle. A deployment's set of envelopes must also keep
+proposal, request, dispatch, and audit-stream identities unique, admit at most one
+approval request per tenant and `call_id`, and bind each tenant `idempotency_key` to a
+single original action hash. Pass several envelopes to the validator to check the set.
+
 ## WebAuthn approval proof
 
 `webauthn-es256` is an optional signature profile for authenticated web approvals.
@@ -249,6 +303,43 @@ Hash linkage proves ordering only for the events presented. Pair an export with 
 event-array digest, and terminal event hash. Retain a checkpoint outside the mutable
 event store when rewrite detection must survive compromise of that store.
 
+## Validating your own records
+
+The reference validator checks this repository's corpus when run without arguments,
+and your records when given files:
+
+```bash
+python scripts/validate_contracts.py --envelope out/envelope.json
+python scripts/validate_contracts.py --envelope a.json --envelope b.json   # also checks the set
+python scripts/validate_contracts.py --record approval-record out/approval.json
+python scripts/validate_contracts.py --envelope out/envelope.json \
+  --schema-file schemas/crm.update_record.schema.json                     # trusted custom schema
+python scripts/validate_contracts.py --audit-events export.jsonl \
+  --audit-snapshot snapshot.json [--anchor sha256:...]                     # offline audit export
+```
+
+Inputs are parsed with duplicate-property and non-finite-number refusal. `--json`
+prints one result object. Exit status is `0` when every input passed, `1` when a
+contract refused an input, and `2` when an input could not be read or parsed.
+
+An audit export may be a contiguous range. A range that starts after sequence 1 must
+name the preceding event hash, and `--anchor` checks it against the hash you retained
+outside the event store. The snapshot's count, bounds, digest, and terminal hash must
+match the exported range exactly.
+
+The repository's `action.yml` runs the same checks in GitHub Actions:
+
+```yaml
+- uses: renezander030/agent-approval-gate@v3.1.0
+  with:
+    envelopes: |
+      out/envelope.json
+    records: |
+      approval-record out/approval.json
+    audit-events: out/audit.jsonl
+    audit-snapshot: out/audit-snapshot.json
+```
+
 ## Conformance corpus
 
 `tests/conformance.json` contains positive examples and lifecycle mutations for
@@ -262,3 +353,6 @@ arguments, forged review hashes, invalid WebAuthn binding, origin drift, counter
 rollback, and signature tampering. `tests/canonicalization.json` is the
 language-neutral byte-and-digest corpus. Together the files can drive validators in
 any implementation language.
+
+`tests/release-3.1.json` adds portable vectors for policy outcomes, revocation, agent
+feedback, the MCP elicitation channel, and the reference action schemas.
