@@ -1,5 +1,5 @@
 {
-  "schema_version": "3.0.0",
+  "schema_version": "3.1.0",
   "proposal_id": "prop_2026-04-28_b3f1a2c4",
   "call_id": "call_2026-04-28_7e19c5ad",
   "agent": {
@@ -24,9 +24,9 @@
   ],
   "action_type": "email.send",
   "payload_schema": {
-    "id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.0.0/schemas/actions/email.send.schema.json",
-    "version": "3.0.0",
-    "digest": "sha256:14730714de221b0506c8ae13b2f783f0eeb52202ea333385bf0d26e840f9d1d4"
+    "id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/actions/email.send.schema.json",
+    "version": "3.1.0",
+    "digest": "sha256:d9115718d3a10fffd5d45476513a068f635e07807a8fd8b333edb7b939ca3a9b"
   },
   "payload": {
     "from": "support@acme-corp.example",

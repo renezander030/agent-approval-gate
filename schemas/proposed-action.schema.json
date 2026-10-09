@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.0.0/schemas/proposed-action.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/proposed-action.schema.json",
   "title": "ProposedAction",
   "description": "An immutable, serializable action draft. The RFC 8785 SHA-256 digest of this complete document is the action_hash carried through approval and dispatch.",
   "type": "object",

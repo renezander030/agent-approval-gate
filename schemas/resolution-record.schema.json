@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.0.0/schemas/resolution-record.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/resolution-record.schema.json",
   "title": "ResolutionRecord",
   "description": "A durable agent-facing receipt for an approval decision. Recording the decision and delivering it are separate facts, so a failed resume can be retried without reopening approval or execution.",
   "type": "object",

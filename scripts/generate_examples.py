@@ -311,7 +311,7 @@ def main() -> None:
     write("audit-snapshot.json", audit_snapshot)
 
     envelope = {
-        "schema_version": "3.0.0",
+        "schema_version": "3.1.0",
         "captured_at": "2026-04-28T09:14:35Z",
         "proposal": proposal,
         "validations": [validation],

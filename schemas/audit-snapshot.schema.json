@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.0.0/schemas/audit-snapshot.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/audit-snapshot.schema.json",
   "title": "AuditSnapshot",
   "description": "A completeness manifest that binds one exported audit-event set to its stream, sequence bounds, entry count, canonical digest, and terminal chain hash.",
   "type": "object",

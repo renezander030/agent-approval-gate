@@ -1,10 +1,10 @@
 {
-  "schema_version": "3.0.0",
+  "schema_version": "3.1.0",
   "approval_id": "approval_2026-04-28_f9821000",
   "request_id": "req_2026-04-28_6a2d8800",
   "proposal_id": "prop_2026-04-28_b3f1a2c4",
   "request_revision": 1,
-  "action_hash": "sha256:94710a0a0a7cebd31eda4a86a91ad493fd162495484726cf7b13fd7906ef5f8c",
+  "action_hash": "sha256:4bb9e71c3744b5e307f9b6f5bb1f09d74971e36079c1891f00f1f38c33fb75c7",
   "payload_hash": "sha256:c919182dcf3aa49d95f5927636aeb7a6a227fa9f9b3daa7384ac4c531a9f891b",
   "review_snapshot_id": "review_2026-04-28_47b2c000",
   "review_content_hash": "sha256:1496a0bf99cb54f169a7deb5e57ec48be882f1859fbd39cc2014563d3a250636",
