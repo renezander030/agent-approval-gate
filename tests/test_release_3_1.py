@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
+import json
 import sys
+import tempfile
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -11,8 +15,8 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from generate_examples import refresh_audit  # noqa: E402
 from validate_contracts import (  # noqa: E402
-    ROOT as REPO, digest, load, payload_errors, policy_outcome_errors, schema_catalog,
-    validate_envelope, validator_for,
+    ROOT as REPO, audit_export_errors, collection_errors, digest, load, main, payload_errors,
+    policy_outcome_errors, schema_catalog, validate_envelope, validator_for,
 )
 
 ACTION_TYPES = ("crm.update_record", "ticket.create", "db.update_row", "api.call", "n8n.trigger_workflow")
@@ -291,6 +295,141 @@ class ElicitationChannelTests(unittest.TestCase):
         envelope["proposal"]["risk"] = "high"
         envelope["approvals"][0].pop("signatures")
         self.assertTrue(schema_errors("schemas/approval-envelope.schema.json", envelope))
+
+
+def renamed(envelope: dict, suffix: str) -> dict:
+    envelope = deepcopy(envelope)
+    envelope["proposal"]["proposal_id"] += suffix
+    envelope["proposal"]["call_id"] += suffix
+    envelope["proposal"]["idempotency_key"] += suffix
+    envelope["request"]["request_id"] += suffix
+    envelope["audit_snapshot"]["stream_id"] += suffix
+    for dispatch in envelope["dispatches"]:
+        dispatch["dispatch_id"] += suffix
+    return envelope
+
+
+class CollectionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.envelope = load("examples/approval-envelope.json")
+
+    def test_independent_lifecycles_pass(self) -> None:
+        self.assertEqual(collection_errors([self.envelope, renamed(self.envelope, "_b")]), [])
+
+    def test_one_call_cannot_raise_two_requests(self) -> None:
+        second = renamed(self.envelope, "_b")
+        second["proposal"]["call_id"] = self.envelope["proposal"]["call_id"]
+        self.assertEqual(
+            collection_errors([self.envelope, second]),
+            ["envelopes 0 and 1: admit more than one approval request for one call"],
+        )
+
+    def test_idempotency_key_binds_one_action(self) -> None:
+        second = renamed(self.envelope, "_b")
+        second["proposal"]["idempotency_key"] = self.envelope["proposal"]["idempotency_key"]
+        second["proposal"]["payload"]["subject"] = "Different action"
+        self.assertIn("envelopes 0 and 1: idempotency_key binds two different actions", collection_errors([self.envelope, second]))
+
+    def test_same_tenant_scope_only(self) -> None:
+        second = renamed(self.envelope, "_b")
+        second["proposal"]["call_id"] = self.envelope["proposal"]["call_id"]
+        second["proposal"]["tenant"] = "other-tenant"
+        self.assertEqual(collection_errors([self.envelope, second]), [])
+
+
+class AuditExportTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.events = load("examples/audit-events.json")
+        self.snapshot = load("examples/audit-snapshot.json")
+
+    def test_complete_export_verifies(self) -> None:
+        self.assertEqual(audit_export_errors(self.events, self.snapshot), [])
+
+    def test_partial_export_continues_from_checkpoint(self) -> None:
+        tail = self.events[4:]
+        self.snapshot.update(entry_count=len(tail), first_sequence=tail[0]["sequence"], events_digest=digest(tail))
+        anchor = self.events[3]["event_hash"]
+        self.assertEqual(audit_export_errors(tail, self.snapshot, anchor), [])
+        self.assertIn("audit export does not continue from the retained checkpoint", audit_export_errors(tail, self.snapshot, self.events[2]["event_hash"]))
+
+    def test_dropped_final_event_is_detected(self) -> None:
+        errors = audit_export_errors(self.events[:-1], self.snapshot)
+        self.assertIn("audit snapshot entry_count is incomplete", errors)
+        self.assertIn("audit snapshot root_event_hash mismatch", errors)
+
+    def test_rewritten_event_is_detected(self) -> None:
+        self.events[2]["detail"]["policy_revision"] = "rewritten"
+        self.assertIn(f"audit event {self.events[2]['event_id']} hash mismatch", audit_export_errors(self.events, self.snapshot))
+
+    def test_removed_middle_event_is_detected(self) -> None:
+        del self.events[3]
+        errors = audit_export_errors(self.events, self.snapshot)
+        self.assertIn("audit sequence is not contiguous", errors)
+
+
+class CommandTests(unittest.TestCase):
+    def run_main(self, *argv: str) -> tuple[int, str]:
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code = main(list(argv))
+        return code, buffer.getvalue()
+
+    def test_valid_records_exit_zero(self) -> None:
+        code, output = self.run_main(
+            "--envelope", str(REPO / "examples/approval-envelope.json"),
+            "--record", "approval-record", str(REPO / "examples/webauthn-approval-record.json"),
+            "--audit-events", str(REPO / "examples/audit-events.json"),
+            "--audit-snapshot", str(REPO / "examples/audit-snapshot.json"),
+        )
+        self.assertEqual(code, 0, output)
+        self.assertIn("All 3 inputs passed.", output)
+
+    def test_invalid_record_exits_one_with_json(self) -> None:
+        record = load("examples/resolution-record.json")
+        record["decision"] = "maybe"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "resolution.json"
+            path.write_text(json.dumps(record), encoding="utf-8")
+            code, output = self.run_main("--json", "--record", "resolution-record", str(path))
+        self.assertEqual(code, 1)
+        result = json.loads(output)
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["results"][0]["errors"])
+
+    def test_ambiguous_json_exits_two(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "envelope.json"
+            path.write_text('{"proposal": {}, "proposal": {}}', encoding="utf-8")
+            code, output = self.run_main("--envelope", str(path))
+        self.assertEqual(code, 2)
+        self.assertIn("duplicate JSON property", output)
+
+    def test_jsonl_audit_export(self) -> None:
+        events = load("examples/audit-events.json")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "events.jsonl"
+            path.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+            code, output = self.run_main("--audit-events", str(path), "--audit-snapshot", str(REPO / "examples/audit-snapshot.json"))
+        self.assertEqual(code, 0, output)
+
+    def test_custom_payload_schema_from_trusted_file(self) -> None:
+        envelope = load("examples/approval-envelope.json")
+        schema = load("schemas/actions/email.send.schema.json")
+        schema["$id"] = "https://schemas.example.com/actions/v1.0.0/email.send.schema.json"
+        with tempfile.TemporaryDirectory() as directory:
+            schema_path = Path(directory) / "email.send.schema.json"
+            schema_path.write_text(json.dumps(schema), encoding="utf-8")
+            envelope["proposal"]["payload_schema"] = {
+                "id": schema["$id"], "version": "1.0.0",
+                "digest": "sha256:" + hashlib.sha256(schema_path.read_bytes()).hexdigest(),
+            }
+            envelope_path = Path(directory) / "envelope.json"
+            envelope_path.write_text(json.dumps(envelope), encoding="utf-8")
+            code, output = self.run_main("--envelope", str(envelope_path))
+            self.assertEqual(code, 1)
+            self.assertIn("payload schema is not available in the trusted local catalog", output)
+            code, output = self.run_main("--envelope", str(envelope_path), "--schema-file", str(schema_path))
+            self.assertNotIn("trusted local catalog", output)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,60 @@
+name: Agent approval gate conformance
+description: Validate approval envelopes, standalone records, and audit exports against the agent-approval-gate contracts.
+branding:
+  icon: check-circle
+  color: green
+inputs:
+  envelopes:
+    description: Newline-separated paths to complete approval envelopes. Two or more are also checked for shared identities.
+    required: false
+    default: ""
+  records:
+    description: Newline-separated "KIND PATH" pairs, for example "approval-record out/approval.json".
+    required: false
+    default: ""
+  schema-files:
+    description: Newline-separated paths to trusted local payload schemas for custom action types.
+    required: false
+    default: ""
+  audit-events:
+    description: Exported audit events (.json array or .jsonl).
+    required: false
+    default: ""
+  audit-snapshot:
+    description: AuditSnapshot manifest for the exported audit events.
+    required: false
+    default: ""
+  anchor:
+    description: Retained hash of the event preceding a partial audit export.
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - shell: bash
+      run: python -m pip install --quiet --requirement "$GITHUB_ACTION_PATH/requirements-dev.txt"
+    - shell: bash
+      env:
+        INPUT_ENVELOPES: ${{ inputs.envelopes }}
+        INPUT_RECORDS: ${{ inputs.records }}
+        INPUT_SCHEMA_FILES: ${{ inputs.schema-files }}
+        INPUT_AUDIT_EVENTS: ${{ inputs.audit-events }}
+        INPUT_AUDIT_SNAPSHOT: ${{ inputs.audit-snapshot }}
+        INPUT_ANCHOR: ${{ inputs.anchor }}
+      run: |
+        set -euo pipefail
+        args=()
+        while IFS= read -r line; do [ -n "$line" ] && args+=(--envelope "$line"); done <<< "$INPUT_ENVELOPES"
+        while IFS= read -r line; do [ -n "$line" ] && args+=(--schema-file "$line"); done <<< "$INPUT_SCHEMA_FILES"
+        while read -r kind path; do [ -n "${kind:-}" ] && args+=(--record "$kind" "$path"); done <<< "$INPUT_RECORDS"
+        [ -n "$INPUT_AUDIT_EVENTS" ] && args+=(--audit-events "$INPUT_AUDIT_EVENTS")
+        [ -n "$INPUT_AUDIT_SNAPSHOT" ] && args+=(--audit-snapshot "$INPUT_AUDIT_SNAPSHOT")
+        [ -n "$INPUT_ANCHOR" ] && args+=(--anchor "$INPUT_ANCHOR")
+        if [ ${#args[@]} -eq 0 ]; then
+          echo "::error::Give at least one of envelopes, records, or audit-events with audit-snapshot."
+          exit 2
+        fi
+        python "$GITHUB_ACTION_PATH/scripts/validate_contracts.py" "${args[@]}"
