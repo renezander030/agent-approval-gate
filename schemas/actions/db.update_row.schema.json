@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/actions/db.update_row.schema.json",
+  "title": "db.update_row payload",
+  "description": "Reference payload contract for a single-row database update. The key and the expected row version bound the update to exactly one reviewed row; there is no free-form query.",
+  "x-action-type": "db.update_row",
+  "x-review-target": ["database", "table", "key"],
+  "type": "object",
+  "required": ["database", "table", "key", "expected_version", "set"],
+  "additionalProperties": false,
+  "properties": {
+    "database": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"},
+    "table": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.]{0,127}$"},
+    "key": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 8,
+      "propertyNames": {"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"},
+      "additionalProperties": {"type": ["string", "integer"]}
+    },
+    "expected_version": {"type": ["string", "integer"]},
+    "set": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 50,
+      "propertyNames": {"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"}
+    }
+  }
+}

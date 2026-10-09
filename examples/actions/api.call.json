@@ -1,0 +1,6 @@
+{
+  "service": "stripe",
+  "operation": "refunds.create",
+  "method": "POST",
+  "body": {"charge": "ch_3P0example", "amount": 4900, "reason": "requested_by_customer"}
+}

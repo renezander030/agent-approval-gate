@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/actions/api.call.schema.json",
+  "title": "api.call payload",
+  "description": "Reference payload contract for a dispatcher-owned HTTP call. The agent names a registered operation, never a URL or credential; the dispatcher resolves the endpoint and authentication.",
+  "x-action-type": "api.call",
+  "x-review-target": ["service", "operation", "method"],
+  "type": "object",
+  "required": ["service", "operation", "method"],
+  "additionalProperties": false,
+  "properties": {
+    "service": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"},
+    "operation": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,127}$"},
+    "method": {"type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"]},
+    "path_params": {
+      "type": "object",
+      "maxProperties": 16,
+      "additionalProperties": {"type": "string", "maxLength": 256}
+    },
+    "query": {
+      "type": "object",
+      "maxProperties": 32,
+      "additionalProperties": {"type": ["string", "number", "boolean"]}
+    },
+    "body": {"type": ["object", "array"]}
+  }
+}

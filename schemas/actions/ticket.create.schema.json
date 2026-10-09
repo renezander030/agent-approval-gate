@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/actions/ticket.create.schema.json",
+  "title": "ticket.create payload",
+  "description": "Reference payload contract for an issue or ticket creation dispatcher.",
+  "x-action-type": "ticket.create",
+  "x-review-target": ["system", "project", "assignee"],
+  "type": "object",
+  "required": ["system", "project", "title", "description"],
+  "additionalProperties": false,
+  "properties": {
+    "system": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"},
+    "project": {"type": "string", "minLength": 1, "maxLength": 128},
+    "title": {"type": "string", "minLength": 1, "maxLength": 256},
+    "description": {"type": "string", "minLength": 1, "maxLength": 65536},
+    "priority": {"type": "string", "enum": ["low", "normal", "high", "urgent"]},
+    "assignee": {"type": "string", "minLength": 1, "maxLength": 128},
+    "labels": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 64}
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/actions/crm.update_record.schema.json",
+  "title": "crm.update_record payload",
+  "description": "Reference payload contract for a CRM update dispatcher. The expected version lets the dispatcher refuse an update to a record that changed after review.",
+  "x-action-type": "crm.update_record",
+  "x-review-target": ["system", "object_type", "record_id"],
+  "type": "object",
+  "required": ["system", "object_type", "record_id", "expected_version", "changes"],
+  "additionalProperties": false,
+  "properties": {
+    "system": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"},
+    "object_type": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"},
+    "record_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "expected_version": {"type": "string", "minLength": 1, "maxLength": 128},
+    "changes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "required": ["field", "to"],
+        "additionalProperties": false,
+        "properties": {
+          "field": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.]{0,127}$"},
+          "from": true,
+          "to": true
+        }
+      }
+    }
+  }
+}
