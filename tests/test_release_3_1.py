@@ -249,5 +249,49 @@ class AgentFeedbackTests(unittest.TestCase):
         self.assertIn("audit resolution reason disagrees with agent feedback", validate_envelope(self.envelope))
 
 
+def elicitation_envelope() -> dict:
+    envelope = load("examples/approval-envelope.json")
+    envelope["request"]["policy"]["requirements"]["allowed_channels"].append("mcp_elicitation")
+    envelope["request"]["channels"].append({
+        "channel": "mcp_elicitation", "target_hash": digest("mcp-session-01"),
+        "delivery_status": "delivered", "notification_id": "elicitation-01", "sent_at": "2026-04-28T09:14:26Z",
+    })
+    approval = envelope["approvals"][0]
+    approval["channel"] = "mcp_elicitation"
+    approval["decided_by"]["authentication"]["method"] = "authenticated_session"
+    envelope["resolutions"][0]["approval_record_hash"] = digest(approval)
+    for event in envelope["audit_events"]:
+        if event["event_type"] == "approval.decided":
+            event["detail"]["channel"] = "mcp_elicitation"
+    refresh_audit(envelope)
+    return envelope
+
+
+class ElicitationChannelTests(unittest.TestCase):
+    def test_human_approval_through_elicitation(self) -> None:
+        self.assertEqual(validate_envelope(elicitation_envelope()), [])
+
+    def test_client_auto_decline_is_not_a_human_rejection(self) -> None:
+        approval = elicitation_envelope()["approvals"][0]
+        approval.update(decision="rejected", rejection_settlement={"state": "unresolved"})
+        for kind, method, present in (("system", "service_identity", False), ("human", "unknown", True), ("human", "authenticated_session", False)):
+            with self.subTest(kind=kind, method=method):
+                approval["decided_by"]["kind"] = kind
+                approval["decided_by"]["authentication"].update(method=method, human_present=present)
+                self.assertTrue(schema_errors("schemas/approval-record.schema.json", approval))
+
+    def test_answer_requires_a_delivered_elicitation(self) -> None:
+        envelope = elicitation_envelope()
+        envelope["request"]["channels"][-1]["delivery_status"] = "failed"
+        errors = validate_envelope(envelope)
+        self.assertIn(f"approval {envelope['approvals'][0]['approval_id']} answers an elicitation that was never delivered", errors)
+
+    def test_high_risk_elicitation_approval_requires_a_signature(self) -> None:
+        envelope = elicitation_envelope()
+        envelope["proposal"]["risk"] = "high"
+        envelope["approvals"][0].pop("signatures")
+        self.assertTrue(schema_errors("schemas/approval-envelope.schema.json", envelope))
+
+
 if __name__ == "__main__":
     unittest.main()

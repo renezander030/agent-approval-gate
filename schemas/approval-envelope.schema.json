@@ -86,7 +86,7 @@
               "if": {
                 "properties": {
                   "decision": {"const": "approved"},
-                  "channel": {"enum": ["telegram", "email"]}
+                  "channel": {"enum": ["telegram", "email", "mcp_elicitation"]}
                 },
                 "required": ["decision", "channel"]
               },

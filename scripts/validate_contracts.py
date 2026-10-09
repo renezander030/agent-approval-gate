@@ -869,6 +869,12 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
         hop["agent"]["identity"] for hop in proposal["delegation_chain"]
     }
     observed_signing_keys: set[str] = set()
+    delivered_channels = {
+        item["channel"] for item in request["channels"] if item["delivery_status"] == "delivered"
+    }
+    for approval in approvals:
+        if approval["channel"] == "mcp_elicitation" and "mcp_elicitation" not in delivered_channels:
+            errors.append(f"approval {approval['approval_id']} answers an elicitation that was never delivered")
     for approval in approved_records:
         approver_id = approval["decided_by"]["identifier"]
         if approval["channel"] not in allowed_channels:

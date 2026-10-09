@@ -50,7 +50,7 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "enum": ["telegram", "slack", "email", "web", "n8n_form", "policy"]
+            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "policy"]
           }
         },
         "signature_required_channels": {
@@ -58,7 +58,7 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "enum": ["telegram", "slack", "email", "web", "n8n_form", "policy"]
+            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "policy"]
           }
         },
         "allow_auto_approval": {"type": "boolean"},
