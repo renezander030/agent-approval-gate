@@ -29,7 +29,7 @@
     "payload_schema": {
       "id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/actions/email.send.schema.json",
       "version": "3.1.0",
-      "digest": "sha256:d9115718d3a10fffd5d45476513a068f635e07807a8fd8b333edb7b939ca3a9b"
+      "digest": "sha256:dc0eef238759e9c212248d0b1b56f62b182d0639e8f330bbe5b64bc1746ff35b"
     },
     "payload": {
       "from": "support@acme-corp.example",
@@ -54,7 +54,7 @@
       "schema_version": "3.1.0",
       "validation_id": "validation_2026-04-28_841ac000",
       "proposal_id": "prop_2026-04-28_b3f1a2c4",
-      "action_hash": "sha256:4bb9e71c3744b5e307f9b6f5bb1f09d74971e36079c1891f00f1f38c33fb75c7",
+      "action_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b",
       "validator": {
         "kind": "system",
         "identifier": "approval-validator",
@@ -96,7 +96,7 @@
       "schema_version": "3.1.0",
       "snapshot_id": "review_2026-04-28_47b2c000",
       "proposal_id": "prop_2026-04-28_b3f1a2c4",
-      "action_hash": "sha256:4bb9e71c3744b5e307f9b6f5bb1f09d74971e36079c1891f00f1f38c33fb75c7",
+      "action_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b",
       "payload_hash": "sha256:c919182dcf3aa49d95f5927636aeb7a6a227fa9f9b3daa7384ac4c531a9f891b",
       "content_hash": "sha256:1496a0bf99cb54f169a7deb5e57ec48be882f1859fbd39cc2014563d3a250636",
       "rendered_at": "2026-04-28T09:14:26Z",
@@ -140,7 +140,7 @@
       "schema_version": "3.1.0",
       "snapshot_id": "review_edited_01",
       "proposal_id": "prop_2026-04-28_b3f1a2c4",
-      "action_hash": "sha256:869ab6e65f9c6ba7fb6a12a7924175dbc9acbbc269692fa3ae916126a03da349",
+      "action_hash": "sha256:540c1a9c0f435f18ec5a36b6521bd7928c44921fd99b613b8ed13f1abbaa5705",
       "payload_hash": "sha256:46bfc2140a183593e6a03ba2ccac7fef1d029dbd8d0cd7c17878b6022f667a02",
       "content_hash": "sha256:b699962e199ac183f4d64a36a21ce73a37ea52d16d7e061e4318c6c2f499bff9",
       "rendered_at": "2026-04-28T09:14:26Z",
@@ -187,7 +187,7 @@
     "proposal_id": "prop_2026-04-28_b3f1a2c4",
     "call_id": "call_2026-04-28_7e19c5ad",
     "tenant": "acme-corp",
-    "action_hash": "sha256:4bb9e71c3744b5e307f9b6f5bb1f09d74971e36079c1891f00f1f38c33fb75c7",
+    "action_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b",
     "validation_id": "validation_2026-04-28_841ac000",
     "review_snapshot_id": "review_2026-04-28_47b2c000",
     "callback_nonce_hash": "sha256:91eaf28be1fa8121d74d9ce65298da05363c70dfb691c4c4e1a17691bb09966a",
@@ -211,7 +211,7 @@
       "revision": "2026-04-15.3",
       "policy_digest": "sha256:a4f5ac837738a43e70baa0f2d602bbba2f2285a518beb568746f310f0678dc35",
       "evaluation_id": "eval_2026-04-28_1c4f8a00",
-      "material_input_hash": "sha256:4bb9e71c3744b5e307f9b6f5bb1f09d74971e36079c1891f00f1f38c33fb75c7",
+      "material_input_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b",
       "evaluated_at": "2026-04-28T09:14:24Z",
       "outcome": "require_approval",
       "requirements": {
@@ -268,7 +268,7 @@
       "request_id": "req_2026-04-28_6a2d8800",
       "proposal_id": "prop_2026-04-28_b3f1a2c4",
       "request_revision": 1,
-      "action_hash": "sha256:869ab6e65f9c6ba7fb6a12a7924175dbc9acbbc269692fa3ae916126a03da349",
+      "action_hash": "sha256:540c1a9c0f435f18ec5a36b6521bd7928c44921fd99b613b8ed13f1abbaa5705",
       "payload_hash": "sha256:46bfc2140a183593e6a03ba2ccac7fef1d029dbd8d0cd7c17878b6022f667a02",
       "review_snapshot_id": "review_edited_01",
       "review_content_hash": "sha256:b699962e199ac183f4d64a36a21ce73a37ea52d16d7e061e4318c6c2f499bff9",
@@ -317,8 +317,8 @@
       "request_id": "req_2026-04-28_6a2d8800",
       "proposal_id": "prop_2026-04-28_b3f1a2c4",
       "call_id": "call_2026-04-28_7e19c5ad",
-      "action_hash": "sha256:869ab6e65f9c6ba7fb6a12a7924175dbc9acbbc269692fa3ae916126a03da349",
-      "approval_record_hash": "sha256:f2e5fa35efd441d96353bf8c7c97a6d9b0b3808ba804bc76fed0edceefa1a2e4",
+      "action_hash": "sha256:540c1a9c0f435f18ec5a36b6521bd7928c44921fd99b613b8ed13f1abbaa5705",
+      "approval_record_hash": "sha256:fd11ae65b40c05fc38e35a923f6a9b6474586c8b8ce96ae0531274e733159ad7",
       "decision": "approved",
       "terminal": true,
       "disposition": "execute_once",
@@ -339,7 +339,7 @@
       "authority_snapshot_id": "authority_2026-04-28_9bc31000",
       "proposal_id": "prop_2026-04-28_b3f1a2c4",
       "request_id": "req_2026-04-28_6a2d8800",
-      "action_hash": "sha256:869ab6e65f9c6ba7fb6a12a7924175dbc9acbbc269692fa3ae916126a03da349",
+      "action_hash": "sha256:540c1a9c0f435f18ec5a36b6521bd7928c44921fd99b613b8ed13f1abbaa5705",
       "checked_at": "2026-04-28T09:14:33Z",
       "valid_until": "2026-04-28T09:15:33Z",
       "status": "active",
@@ -396,7 +396,7 @@
         "approval_2026-04-28_f9821000"
       ],
       "authority_snapshot_id": "authority_2026-04-28_9bc31000",
-      "action_hash": "sha256:869ab6e65f9c6ba7fb6a12a7924175dbc9acbbc269692fa3ae916126a03da349",
+      "action_hash": "sha256:540c1a9c0f435f18ec5a36b6521bd7928c44921fd99b613b8ed13f1abbaa5705",
       "idempotency_key": "idem_email_ZD-48211_reply_01",
       "attempt": 1,
       "max_attempts": 3,
@@ -422,7 +422,7 @@
       "stream_id": "stream_prop_b3f1a2c4",
       "sequence": 1,
       "previous_event_hash": null,
-      "event_hash": "sha256:a3c25a90b7314141c724ac5af2b2e4209a5a92b431f6058d1ba26db70edc60d7",
+      "event_hash": "sha256:ec2bf93c92a00c304b7236e832ce2bbe2b647a596cc63644f6b117417645ddc5",
       "event_type": "proposal.received",
       "occurred_at": "2026-04-28T09:14:23Z",
       "recorded_at": "2026-04-28T09:14:24Z",
@@ -446,7 +446,7 @@
       },
       "references": {},
       "detail": {
-        "action_hash": "sha256:4bb9e71c3744b5e307f9b6f5bb1f09d74971e36079c1891f00f1f38c33fb75c7"
+        "action_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b"
       }
     },
     {
@@ -454,8 +454,8 @@
       "event_id": "event_2026-04-28_00000002",
       "stream_id": "stream_prop_b3f1a2c4",
       "sequence": 2,
-      "previous_event_hash": "sha256:a3c25a90b7314141c724ac5af2b2e4209a5a92b431f6058d1ba26db70edc60d7",
-      "event_hash": "sha256:f330ca8037dac832bff31939225b529abb984bfd13506d35aa23557b80ce58f6",
+      "previous_event_hash": "sha256:ec2bf93c92a00c304b7236e832ce2bbe2b647a596cc63644f6b117417645ddc5",
+      "event_hash": "sha256:19ee8cb6777da6401081a10f0632d7cf2d374864fc9756342e9e2a9b9f072162",
       "event_type": "validation.passed",
       "occurred_at": "2026-04-28T09:14:24Z",
       "recorded_at": "2026-04-28T09:14:24Z",
@@ -481,7 +481,7 @@
         "validation_id": "validation_2026-04-28_841ac000"
       },
       "detail": {
-        "action_hash": "sha256:4bb9e71c3744b5e307f9b6f5bb1f09d74971e36079c1891f00f1f38c33fb75c7"
+        "action_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b"
       }
     },
     {
@@ -489,8 +489,8 @@
       "event_id": "event_2026-04-28_00000003",
       "stream_id": "stream_prop_b3f1a2c4",
       "sequence": 3,
-      "previous_event_hash": "sha256:f330ca8037dac832bff31939225b529abb984bfd13506d35aa23557b80ce58f6",
-      "event_hash": "sha256:4d37dcbe202386c945d561023444926cc7c26095fdf8367e08b7d043f2641801",
+      "previous_event_hash": "sha256:19ee8cb6777da6401081a10f0632d7cf2d374864fc9756342e9e2a9b9f072162",
+      "event_hash": "sha256:08e41cb26375e4a207e417c885dceb78f83054c0ccecea06958bad6d5fcbfb94",
       "event_type": "approval.requested",
       "occurred_at": "2026-04-28T09:14:25Z",
       "recorded_at": "2026-04-28T09:14:25Z",
@@ -518,7 +518,7 @@
         "policy_evaluation_id": "eval_2026-04-28_1c4f8a00"
       },
       "detail": {
-        "action_hash": "sha256:4bb9e71c3744b5e307f9b6f5bb1f09d74971e36079c1891f00f1f38c33fb75c7",
+        "action_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b",
         "policy_revision": "2026-04-15.3"
       }
     },
@@ -527,8 +527,8 @@
       "event_id": "event_2026-04-28_00000004",
       "stream_id": "stream_prop_b3f1a2c4",
       "sequence": 4,
-      "previous_event_hash": "sha256:4d37dcbe202386c945d561023444926cc7c26095fdf8367e08b7d043f2641801",
-      "event_hash": "sha256:38f0e0634430de10bf56e387543ea246c22c82baf0ba5abcd931191df28cee40",
+      "previous_event_hash": "sha256:08e41cb26375e4a207e417c885dceb78f83054c0ccecea06958bad6d5fcbfb94",
+      "event_hash": "sha256:0b7b9061103a019b39628e26b2aea2656bb73d28221f2be251b7e67783391379",
       "event_type": "review.presented",
       "occurred_at": "2026-04-28T09:14:26Z",
       "recorded_at": "2026-04-28T09:14:26Z",
@@ -555,7 +555,7 @@
         "review_snapshot_id": "review_2026-04-28_47b2c000"
       },
       "detail": {
-        "action_hash": "sha256:4bb9e71c3744b5e307f9b6f5bb1f09d74971e36079c1891f00f1f38c33fb75c7",
+        "action_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b",
         "payload_hash": "sha256:c919182dcf3aa49d95f5927636aeb7a6a227fa9f9b3daa7384ac4c531a9f891b",
         "review_content_hash": "sha256:1496a0bf99cb54f169a7deb5e57ec48be882f1859fbd39cc2014563d3a250636"
       }
@@ -565,8 +565,8 @@
       "event_id": "event_edited_review_01",
       "stream_id": "stream_prop_b3f1a2c4",
       "sequence": 5,
-      "previous_event_hash": "sha256:38f0e0634430de10bf56e387543ea246c22c82baf0ba5abcd931191df28cee40",
-      "event_hash": "sha256:086ce5b15dbeee2c84732c13eb5b2301a9f42266fcc3b56d6bb722b5132e8343",
+      "previous_event_hash": "sha256:0b7b9061103a019b39628e26b2aea2656bb73d28221f2be251b7e67783391379",
+      "event_hash": "sha256:412257855b4f433a3942618eb1011932d3b873a460125d8d1e0e3fa63d817761",
       "event_type": "review.presented",
       "occurred_at": "2026-04-28T09:14:26Z",
       "recorded_at": "2026-04-28T09:14:26Z",
@@ -593,7 +593,7 @@
         "review_snapshot_id": "review_edited_01"
       },
       "detail": {
-        "action_hash": "sha256:869ab6e65f9c6ba7fb6a12a7924175dbc9acbbc269692fa3ae916126a03da349",
+        "action_hash": "sha256:540c1a9c0f435f18ec5a36b6521bd7928c44921fd99b613b8ed13f1abbaa5705",
         "payload_hash": "sha256:46bfc2140a183593e6a03ba2ccac7fef1d029dbd8d0cd7c17878b6022f667a02",
         "review_content_hash": "sha256:b699962e199ac183f4d64a36a21ce73a37ea52d16d7e061e4318c6c2f499bff9"
       }
@@ -603,8 +603,8 @@
       "event_id": "event_2026-04-28_00000005",
       "stream_id": "stream_prop_b3f1a2c4",
       "sequence": 6,
-      "previous_event_hash": "sha256:086ce5b15dbeee2c84732c13eb5b2301a9f42266fcc3b56d6bb722b5132e8343",
-      "event_hash": "sha256:33e55aba6e3991cfe0bfaae572932e08dc06d445eb6ae375b4c0ae8390d654a7",
+      "previous_event_hash": "sha256:412257855b4f433a3942618eb1011932d3b873a460125d8d1e0e3fa63d817761",
+      "event_hash": "sha256:5a4c24d2f0d78635f2e07885b14684ab0c405a2df765fdc35c4af025d542816e",
       "event_type": "approval.decided",
       "occurred_at": "2026-04-28T09:14:30Z",
       "recorded_at": "2026-04-28T09:14:31Z",
@@ -637,7 +637,7 @@
       "detail": {
         "decision": "approved",
         "channel": "email",
-        "action_hash": "sha256:869ab6e65f9c6ba7fb6a12a7924175dbc9acbbc269692fa3ae916126a03da349",
+        "action_hash": "sha256:540c1a9c0f435f18ec5a36b6521bd7928c44921fd99b613b8ed13f1abbaa5705",
         "payload_hash": "sha256:46bfc2140a183593e6a03ba2ccac7fef1d029dbd8d0cd7c17878b6022f667a02",
         "policy_revision": "2026-04-15.3",
         "wait_ms": 7000
@@ -648,8 +648,8 @@
       "event_id": "event_2026-04-28_00000006",
       "stream_id": "stream_prop_b3f1a2c4",
       "sequence": 7,
-      "previous_event_hash": "sha256:33e55aba6e3991cfe0bfaae572932e08dc06d445eb6ae375b4c0ae8390d654a7",
-      "event_hash": "sha256:f34423c21e705a045b1612464a96706b48d2c859f6514e757b7806b89776f1e3",
+      "previous_event_hash": "sha256:5a4c24d2f0d78635f2e07885b14684ab0c405a2df765fdc35c4af025d542816e",
+      "event_hash": "sha256:3a951319c784af29952b619b212984c4c089e9cbf5018cd23d315b7bacfa91d0",
       "event_type": "resolution.emitted",
       "occurred_at": "2026-04-28T09:14:32Z",
       "recorded_at": "2026-04-28T09:14:32Z",
@@ -678,7 +678,7 @@
       },
       "detail": {
         "decision": "approved",
-        "action_hash": "sha256:869ab6e65f9c6ba7fb6a12a7924175dbc9acbbc269692fa3ae916126a03da349"
+        "action_hash": "sha256:540c1a9c0f435f18ec5a36b6521bd7928c44921fd99b613b8ed13f1abbaa5705"
       }
     },
     {
@@ -686,8 +686,8 @@
       "event_id": "event_2026-04-28_00000007",
       "stream_id": "stream_prop_b3f1a2c4",
       "sequence": 8,
-      "previous_event_hash": "sha256:f34423c21e705a045b1612464a96706b48d2c859f6514e757b7806b89776f1e3",
-      "event_hash": "sha256:59abe0535810b71f0ee0892bce6a879b1d9c97d3f8f7981145136bbc913bca66",
+      "previous_event_hash": "sha256:3a951319c784af29952b619b212984c4c089e9cbf5018cd23d315b7bacfa91d0",
+      "event_hash": "sha256:300b3ba6f3c7786b9ad8108e71e8464aa2b809bc70db8a54f21c6e37ef15fce6",
       "event_type": "authority.checked",
       "occurred_at": "2026-04-28T09:14:33Z",
       "recorded_at": "2026-04-28T09:14:33Z",
@@ -715,7 +715,7 @@
         "authority_snapshot_id": "authority_2026-04-28_9bc31000"
       },
       "detail": {
-        "action_hash": "sha256:869ab6e65f9c6ba7fb6a12a7924175dbc9acbbc269692fa3ae916126a03da349"
+        "action_hash": "sha256:540c1a9c0f435f18ec5a36b6521bd7928c44921fd99b613b8ed13f1abbaa5705"
       }
     },
     {
@@ -723,8 +723,8 @@
       "event_id": "event_2026-04-28_00000008",
       "stream_id": "stream_prop_b3f1a2c4",
       "sequence": 9,
-      "previous_event_hash": "sha256:59abe0535810b71f0ee0892bce6a879b1d9c97d3f8f7981145136bbc913bca66",
-      "event_hash": "sha256:28d7c070f0dd5a81851fdbdb869c1b2163abed1b70c8a74f6633b612f729953d",
+      "previous_event_hash": "sha256:300b3ba6f3c7786b9ad8108e71e8464aa2b809bc70db8a54f21c6e37ef15fce6",
+      "event_hash": "sha256:181dbe8e10ae8e908b8f5e1ce182e0b28c980569f4f190edcf4d8dfd389940a6",
       "event_type": "dispatch.succeeded",
       "occurred_at": "2026-04-28T09:14:34Z",
       "recorded_at": "2026-04-28T09:14:34Z",
@@ -752,7 +752,7 @@
         "dispatch_id": "dispatch_2026-04-28_4ad31000"
       },
       "detail": {
-        "action_hash": "sha256:869ab6e65f9c6ba7fb6a12a7924175dbc9acbbc269692fa3ae916126a03da349",
+        "action_hash": "sha256:540c1a9c0f435f18ec5a36b6521bd7928c44921fd99b613b8ed13f1abbaa5705",
         "attempt": 1,
         "provider_result_hash": "sha256:78b0436944885eb78c09ea1a657e2d2c57b0d9672a19f709e6724c22a633a29b"
       }
@@ -762,8 +762,8 @@
       "event_id": "event_2026-04-28_00000009",
       "stream_id": "stream_prop_b3f1a2c4",
       "sequence": 10,
-      "previous_event_hash": "sha256:28d7c070f0dd5a81851fdbdb869c1b2163abed1b70c8a74f6633b612f729953d",
-      "event_hash": "sha256:9d37090b1cf41b2522f74eedddf8712ce5b6cf813480e7e5a30a2252b391310b",
+      "previous_event_hash": "sha256:181dbe8e10ae8e908b8f5e1ce182e0b28c980569f4f190edcf4d8dfd389940a6",
+      "event_hash": "sha256:ab29c69805b3ab61cc9b06585a867681154dcb2189c227f87d2c9413d4f9a826",
       "event_type": "audit.snapshotted",
       "occurred_at": "2026-04-28T09:14:35Z",
       "recorded_at": "2026-04-28T09:14:35Z",
@@ -800,7 +800,7 @@
     "entry_count": 10,
     "first_sequence": 1,
     "last_sequence": 10,
-    "events_digest": "sha256:a7453b7ca32b6f5d6a13eef966ddddcc3cb40fc2a94072b29efa41223dcf4ef4",
-    "root_event_hash": "sha256:9d37090b1cf41b2522f74eedddf8712ce5b6cf813480e7e5a30a2252b391310b"
+    "events_digest": "sha256:63449284d9b359e857958736715e6fad152d0df2d51c795b10d67252852ca9f1",
+    "root_event_hash": "sha256:ab29c69805b3ab61cc9b06585a867681154dcb2189c227f87d2c9413d4f9a826"
   }
 }

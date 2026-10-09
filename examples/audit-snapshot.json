@@ -7,6 +7,6 @@
   "entry_count": 9,
   "first_sequence": 1,
   "last_sequence": 9,
-  "events_digest": "sha256:3089d2617c8a89088886d8043f8d1005afe147c20f854cccdfb542a1e13f72ef",
-  "root_event_hash": "sha256:f3ba0fede207062f795130d1b1f77fd6a457e07c0caaa4979cdc2eb8a1f92989"
+  "events_digest": "sha256:f554f69da88c06819364a6b7e3ca361f7b72f7cb5929221537c3819325a153eb",
+  "root_event_hash": "sha256:496ef04099ca3fdfe596d2cb037e27ad594a346bd478f978a9bb5182988096af"
 }

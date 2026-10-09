@@ -26,7 +26,7 @@
   "payload_schema": {
     "id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/actions/email.send.schema.json",
     "version": "3.1.0",
-    "digest": "sha256:d9115718d3a10fffd5d45476513a068f635e07807a8fd8b333edb7b939ca3a9b"
+    "digest": "sha256:dc0eef238759e9c212248d0b1b56f62b182d0639e8f330bbe5b64bc1746ff35b"
   },
   "payload": {
     "from": "support@acme-corp.example",

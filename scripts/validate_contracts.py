@@ -356,15 +356,36 @@ def canonicalization_errors() -> list[str]:
     return errors
 
 
-def payload_errors(action: dict[str, Any], schema_files: dict[str, Path] | None = None) -> list[str]:
-    """Use locally supplied released bytes; never resolve an agent-selected URL."""
-    if "payload" not in action:
-        return ["effective action has no payload"]
+def payload_schema_files(schema_files: dict[str, Path] | None = None) -> dict[str, Path]:
     files = {
         load(path)["$id"]: path
         for path in (ROOT / "schemas" / "actions").glob("*.json")
     }
     files.update(schema_files or {})
+    return files
+
+
+def review_target_fields(
+    action: dict[str, Any], schema_files: dict[str, Path] | None = None
+) -> list[str] | None:
+    """Payload members the approver must see as the target, from the trusted schema."""
+    path = payload_schema_files(schema_files).get(action["payload_schema"]["id"])
+    if path is None:
+        return None
+    try:
+        fields = load(path).get("x-review-target")
+    except (OSError, ValueError):
+        return None
+    if not isinstance(fields, list) or not all(isinstance(item, str) for item in fields):
+        return None
+    return fields
+
+
+def payload_errors(action: dict[str, Any], schema_files: dict[str, Path] | None = None) -> list[str]:
+    """Use locally supplied released bytes; never resolve an agent-selected URL."""
+    if "payload" not in action:
+        return ["effective action has no payload"]
+    files = payload_schema_files(schema_files)
     binding = action["payload_schema"]
     path = files.get(binding["id"])
     if path is None:
@@ -685,15 +706,15 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
             errors.append(f"review snapshot {snapshot['snapshot_id']} predates proposal")
         if rendered_at > request_expires_at:
             errors.append(f"review snapshot {snapshot['snapshot_id']} was rendered after expiry")
-        if proposal["action_type"] == "email.send":
+        target_fields = review_target_fields(proposal, schema_files)
+        arguments = snapshot["content"]["arguments"]
+        if target_fields is not None and isinstance(arguments, dict):
             expected_target = {
-                key: snapshot["content"]["arguments"][key]
-                for key in ("from", "to", "cc")
-                if key in snapshot["content"]["arguments"]
+                key: arguments[key] for key in target_fields if key in arguments
             }
             if snapshot["content"]["target"] != expected_target:
                 errors.append(
-                    f"review snapshot {snapshot['snapshot_id']} changes the email target"
+                    f"review snapshot {snapshot['snapshot_id']} changes the {proposal['action_type']} target"
                 )
 
     initial_snapshot = snapshot_by_id.get(request["review_snapshot_id"])

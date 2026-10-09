@@ -4,7 +4,7 @@
   "revision": "2026-04-15.3",
   "policy_digest": "sha256:a4f5ac837738a43e70baa0f2d602bbba2f2285a518beb568746f310f0678dc35",
   "evaluation_id": "eval_2026-04-28_1c4f8a00",
-  "material_input_hash": "sha256:4bb9e71c3744b5e307f9b6f5bb1f09d74971e36079c1891f00f1f38c33fb75c7",
+  "material_input_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b",
   "evaluated_at": "2026-04-28T09:14:24Z",
   "outcome": "require_approval",
   "requirements": {
