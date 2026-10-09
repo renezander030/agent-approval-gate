@@ -534,6 +534,25 @@ def audit_binding_errors(envelope: dict[str, Any]) -> list[str]:
     return errors
 
 
+def policy_outcome_errors(
+    request: dict[str, Any], approvals: list[dict[str, Any]], dispatches: list[dict[str, Any]]
+) -> list[str]:
+    """Only an explicit, closed policy outcome may select an approval path."""
+    errors: list[str] = []
+    outcome = request["policy"].get("outcome")
+    auto_approvals = [item for item in approvals if item["decision"] == "auto_approved"]
+    if auto_approvals and outcome != "auto_approve":
+        errors.append("auto approval requires an explicit auto_approve policy outcome")
+    if outcome == "deny":
+        if request["status"] != "failed" or request.get("terminal_reason") != "policy_failed":
+            errors.append("denied policy outcome must end the request as policy_failed")
+        if any(item["decision"] in {"approved", "auto_approved"} for item in approvals):
+            errors.append("denied policy outcome cannot carry an approving decision")
+        if any(item["status"] != "not_dispatched" for item in dispatches):
+            errors.append("denied policy outcome cannot invoke a provider")
+    return errors
+
+
 def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | None = None) -> list[str]:
     errors: list[str] = []
     proposal = envelope["proposal"]
@@ -768,6 +787,7 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
                 errors.append(f"approval {approval['approval_id']} was decided after expiry")
 
     requirements = request["policy"]["requirements"]
+    errors.extend(policy_outcome_errors(request, approvals, dispatches))
     if request["status"] in {"approved", "consumed"} and len(approved_records) < requirements["minimum_approvals"]:
         errors.append("approval quorum is not satisfied")
     if requirements["distinct_approvers"]:

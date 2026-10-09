@@ -23,6 +23,12 @@
     "evaluation_id": {"$ref": "common.schema.json#/$defs/identifier"},
     "material_input_hash": {"$ref": "common.schema.json#/$defs/digest"},
     "evaluated_at": {"type": "string", "format": "date-time"},
+    "outcome": {
+      "description": "The evaluator's closed decision for this action. Record any other evaluator result, including a non-boolean, unknown, or errored result, as deny.",
+      "type": "string",
+      "enum": ["require_approval", "auto_approve", "deny"]
+    },
+    "outcome_reason": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 500},
     "requirements": {
       "type": "object",
       "required": [
@@ -96,5 +102,15 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"const": "auto_approve"}}, "required": ["outcome"]},
+      "then": {
+        "properties": {
+          "requirements": {"properties": {"allow_auto_approval": {"const": true}}}
+        }
+      }
+    }
+  ]
 }

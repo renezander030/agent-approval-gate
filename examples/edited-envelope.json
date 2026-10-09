@@ -213,6 +213,7 @@
       "evaluation_id": "eval_2026-04-28_1c4f8a00",
       "material_input_hash": "sha256:4bb9e71c3744b5e307f9b6f5bb1f09d74971e36079c1891f00f1f38c33fb75c7",
       "evaluated_at": "2026-04-28T09:14:24Z",
+      "outcome": "require_approval",
       "requirements": {
         "minimum_approvals": 1,
         "distinct_approvers": true,
