@@ -210,6 +210,7 @@ compatibility rules.
 
 ## Related work
 
+- [HTTP If-Match and 412: stop stale agent writes after approval](https://gist.github.com/renezander030/383aa72aa2df60379f72e12b5602c09d) — atomic target-version checks preserve a newer human edit; includes a runnable HTTP race fixture.
 - [Action-bound approval audit in SQLite (PAAN #15)](https://gist.github.com/renezander030/ad81c7a805a09a844983f881e2c487e5) — persistence errors block release; action/payload/target-version binding and revocation.
 - [Tested automation reference examples](https://github.com/renezander030/automation-reference-examples) — offline fixtures for malformed hook input, uncertain queue dispatch, approval consumption and permission revocation.
 
