@@ -465,8 +465,27 @@ def dispatch_history_errors(dispatches: list[dict[str, Any]], request: dict[str,
 
 
 def audit_binding_errors(envelope: dict[str, Any]) -> list[str]:
+    """Every lifecycle record has a typed audit witness, and every witness agrees with its record."""
     errors: list[str] = []
     request = envelope["request"]
+    event_types = {event["event_type"] for event in envelope["audit_events"]}
+    required_event_types = {
+        "proposal.received",
+        "validation.passed",
+        "approval.requested",
+        "review.presented",
+        "audit.snapshotted",
+    }
+    for key, event_type in (("approvals", "approval.decided"), ("resolutions", "resolution.emitted"),
+                            ("authority_snapshots", "authority.checked")):
+        if envelope[key]:
+            required_event_types.add(event_type)
+    terminal_events = {"expired": "approval.expired", "cancelled": "approval.cancelled", "revoked": "approval.revoked"}
+    if request["status"] in terminal_events:
+        required_event_types.add(terminal_events[request["status"]])
+    missing_event_types = sorted(required_event_types - event_types)
+    if missing_event_types:
+        errors.append("audit stream lacks required lifecycle events: " + ", ".join(missing_event_types))
     records = {
         "validation_id": {x["validation_id"]: x for x in envelope["validations"]},
         "review_snapshot_id": {x["snapshot_id"]: x for x in envelope["review_snapshots"]},
@@ -488,6 +507,12 @@ def audit_binding_errors(envelope: dict[str, Any]) -> list[str]:
         "dispatch_id": {"dispatch.not_dispatched", "dispatch.succeeded", "dispatch.failed", "dispatch.outcome_unknown", "dispatch.reconciled"},
         "audit_snapshot_id": {"audit.snapshotted"},
     }
+    if envelope["dispatches"] and not event_types & witness_types["dispatch_id"]:
+        errors.append("audit stream has no terminal dispatch event")
+    for key in witness_types:
+        referenced = {event["references"][key] for event in envelope["audit_events"] if key in event["references"]}
+        if not set(records[key]).issubset(referenced):
+            errors.append(f"audit stream omits a {key} lifecycle reference")
     witnessed: dict[str, set[str]] = {key: set() for key in witness_types}
     event_ids: set[str] = set()
     for event in envelope["audit_events"]:
@@ -609,6 +634,24 @@ def revocation_errors(
             errors.append("audit revocation actor disagrees with request")
         if event["detail"].get("reason_code", revocation["reason_code"]) != revocation["reason_code"]:
             errors.append("audit revocation reason disagrees with request")
+    return errors
+
+
+def audit_snapshot_errors(events: list[dict[str, Any]], snapshot: dict[str, Any]) -> list[str]:
+    """Whether an AuditSnapshot manifest describes exactly this non-empty event range."""
+    errors: list[str] = []
+    if snapshot["entry_count"] != len(events):
+        errors.append("audit snapshot entry_count is incomplete")
+    if snapshot["first_sequence"] != events[0]["sequence"]:
+        errors.append("audit snapshot first_sequence mismatch")
+    if snapshot["last_sequence"] != events[-1]["sequence"]:
+        errors.append("audit snapshot last_sequence mismatch")
+    if snapshot["events_digest"] != digest(events):
+        errors.append("audit snapshot events_digest mismatch")
+    if snapshot["root_event_hash"] != events[-1]["event_hash"]:
+        errors.append("audit snapshot root_event_hash mismatch")
+    if parse_time(snapshot["captured_at"]) < parse_time(events[-1]["recorded_at"]):
+        errors.append("audit snapshot predates its final event")
     return errors
 
 
@@ -1180,75 +1223,8 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
 
     if audit_snapshot["stream_id"] not in stream_ids:
         errors.append("audit snapshot points at another stream")
-    if audit_snapshot["entry_count"] != len(events):
-        errors.append("audit snapshot entry_count is incomplete")
-    if audit_snapshot["first_sequence"] != events[0]["sequence"]:
-        errors.append("audit snapshot first_sequence mismatch")
-    if audit_snapshot["last_sequence"] != events[-1]["sequence"]:
-        errors.append("audit snapshot last_sequence mismatch")
-    if audit_snapshot["events_digest"] != digest(events):
-        errors.append("audit snapshot events_digest mismatch")
-    if audit_snapshot["root_event_hash"] != events[-1]["event_hash"]:
-        errors.append("audit snapshot root_event_hash mismatch")
-    if parse_time(audit_snapshot["captured_at"]) < parse_time(events[-1]["recorded_at"]):
-        errors.append("audit snapshot predates its final event")
+    errors.extend(audit_snapshot_errors(events, audit_snapshot))
 
-    event_types = {event["event_type"] for event in events}
-    required_event_types = {
-        "proposal.received",
-        "validation.passed",
-        "approval.requested",
-        "review.presented",
-        "audit.snapshotted",
-    }
-    if approvals:
-        required_event_types.add("approval.decided")
-    if resolutions:
-        required_event_types.add("resolution.emitted")
-    if authority_snapshots:
-        required_event_types.add("authority.checked")
-    if request["status"] == "expired":
-        required_event_types.add("approval.expired")
-    if request["status"] == "cancelled":
-        required_event_types.add("approval.cancelled")
-    if request["status"] == "revoked":
-        required_event_types.add("approval.revoked")
-    missing_event_types = sorted(required_event_types - event_types)
-    if missing_event_types:
-        errors.append(
-            "audit stream lacks required lifecycle events: "
-            + ", ".join(missing_event_types)
-        )
-    if dispatches and not event_types.intersection(
-        {
-            "dispatch.succeeded",
-            "dispatch.failed",
-            "dispatch.outcome_unknown",
-            "dispatch.reconciled",
-            "dispatch.not_dispatched",
-        }
-    ):
-        errors.append("audit stream has no terminal dispatch event")
-    expected_audit_references = {
-        "validation_id": {item["validation_id"] for item in validations},
-        "review_snapshot_id": {item["snapshot_id"] for item in review_snapshots},
-        "request_id": {request["request_id"]},
-        "approval_id": set(approval_by_id),
-        "resolution_id": {item["resolution_id"] for item in resolutions},
-        "authority_snapshot_id": set(authority_by_id),
-        "dispatch_id": {item["dispatch_id"] for item in dispatches},
-        "audit_snapshot_id": {audit_snapshot["snapshot_id"]},
-    }
-    observed_audit_references: dict[str, set[str]] = {
-        key: set() for key in expected_audit_references
-    }
-    for event in events:
-        for key, value in event["references"].items():
-            if key in observed_audit_references:
-                observed_audit_references[key].add(value)
-    for key, expected in expected_audit_references.items():
-        if not expected.issubset(observed_audit_references[key]):
-            errors.append(f"audit stream omits a {key} lifecycle reference")
     errors.extend(audit_binding_errors(envelope))
     return errors
 
@@ -1484,18 +1460,7 @@ def audit_export_errors(
             errors.append("audit event recording times are not monotonic")
         expected_previous = event["event_hash"]
         previous_recorded_at = recorded_at
-    if snapshot["entry_count"] != len(events):
-        errors.append("audit snapshot entry_count is incomplete")
-    if snapshot["first_sequence"] != first["sequence"]:
-        errors.append("audit snapshot first_sequence mismatch")
-    if snapshot["last_sequence"] != events[-1]["sequence"]:
-        errors.append("audit snapshot last_sequence mismatch")
-    if snapshot["events_digest"] != digest(events):
-        errors.append("audit snapshot events_digest mismatch")
-    if snapshot["root_event_hash"] != events[-1]["event_hash"]:
-        errors.append("audit snapshot root_event_hash mismatch")
-    if parse_time(snapshot["captured_at"]) < parse_time(events[-1]["recorded_at"]):
-        errors.append("audit snapshot predates its final event")
+    errors.extend(audit_snapshot_errors(events, snapshot))
     return errors
 
 
@@ -1590,18 +1555,11 @@ def main(argv: list[str] | None = None) -> int:
     user_mode = bool(args.envelope or args.record or args.audit_events or args.audit_snapshot)
     try:
         results = validate_inputs(args) if user_mode else [("repository", validate_repository())]
-    except (OSError, ValueError) as error:
-        message = str(error) if user_mode else "contract input could not be validated"
-        if args.json:
-            print(json.dumps({"ok": False, "error": message}))
-        else:
-            print(f"ERROR: {message}")
-        return 2
-    except (TypeError, KeyError, IndexError, rfc8785.CanonicalizationError):
-        if args.json:
-            print(json.dumps({"ok": False, "error": "contract input could not be validated"}))
-        else:
-            print("ERROR: contract input could not be validated")
+    except (OSError, ValueError, TypeError, KeyError, IndexError) as error:
+        # Only file and parse failures in your own inputs are specific enough to echo back.
+        readable = user_mode and isinstance(error, (OSError, ValueError))
+        message = str(error) if readable else "contract input could not be validated"
+        print(json.dumps({"ok": False, "error": message}) if args.json else f"ERROR: {message}")
         return 2
     ok = not any(errors for _, errors in results)
     if args.json:
