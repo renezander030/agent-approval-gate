@@ -3,16 +3,18 @@
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
+import sys
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-import rfc8785
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from validate_contracts import digest as digest_value, encode_base64url as base64url  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,16 +31,8 @@ def write(name: str, value: Any) -> None:
     (EXAMPLES / name).write_text(rendered, encoding="utf-8")
 
 
-def digest_value(value: Any) -> str:
-    return "sha256:" + hashlib.sha256(rfc8785.dumps(value)).hexdigest()
-
-
 def digest_file(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def base64url(value: bytes) -> str:
-    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
 def refresh_audit(envelope: dict[str, Any]) -> None:
@@ -320,9 +314,7 @@ def main() -> None:
 
     audit_snapshot = load("audit-snapshot.json")
     events = load("audit-events.json")
-    previous_hash: str | None = None
     for event in events:
-        event["previous_event_hash"] = previous_hash
         detail = event["detail"]
         if "action_hash" in detail:
             detail["action_hash"] = action_hash
@@ -332,17 +324,6 @@ def main() -> None:
             detail["review_content_hash"] = review_snapshot["content_hash"]
         if "audit_snapshot_id" in event["references"]:
             event["references"]["audit_snapshot_id"] = audit_snapshot["snapshot_id"]
-        unhashed = {key: value for key, value in event.items() if key != "event_hash"}
-        event["event_hash"] = digest_value(unhashed)
-        previous_hash = event["event_hash"]
-    write("audit-events.json", events)
-
-    audit_snapshot["entry_count"] = len(events)
-    audit_snapshot["first_sequence"] = events[0]["sequence"]
-    audit_snapshot["last_sequence"] = events[-1]["sequence"]
-    audit_snapshot["events_digest"] = digest_value(events)
-    audit_snapshot["root_event_hash"] = events[-1]["event_hash"]
-    write("audit-snapshot.json", audit_snapshot)
 
     envelope = {
         "schema_version": "3.1.0",
@@ -358,6 +339,9 @@ def main() -> None:
         "audit_events": events,
         "audit_snapshot": audit_snapshot,
     }
+    refresh_audit(envelope)
+    write("audit-events.json", events)
+    write("audit-snapshot.json", audit_snapshot)
     write("approval-envelope.json", envelope)
     lifecycle_examples(envelope)
 
