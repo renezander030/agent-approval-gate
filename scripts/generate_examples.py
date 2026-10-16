@@ -206,6 +206,12 @@ def main() -> None:
     policy = load("approval-policy.json")
     policy["material_input_hash"] = action_hash
     write("approval-policy.json", policy)
+    rule_trace = deepcopy(policy)
+    rule_trace["matched_rules"] = [
+        {"rule_id": "rule.email.external-recipient", "effect": "require_approval"},
+        {"rule_id": "rule.support.linked-ticket", "effect": "auto_approve"},
+    ]
+    write("approval-policy-rules.json", rule_trace)
 
     review_snapshot = load("review-snapshot.json")
     review_snapshot["action_hash"] = action_hash

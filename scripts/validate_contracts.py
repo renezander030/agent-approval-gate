@@ -584,11 +584,26 @@ def audit_binding_errors(envelope: dict[str, Any]) -> list[str]:
     return errors
 
 
+def policy_rule_errors(policy: dict[str, Any]) -> list[str]:
+    """The recorded outcome follows deny > require_approval > auto_approve over the matched rules."""
+    if "matched_rules" not in policy:
+        return []
+    errors: list[str] = []
+    rule_ids = [rule["rule_id"] for rule in policy["matched_rules"]]
+    if len(rule_ids) != len(set(rule_ids)):
+        errors.append("policy matched_rules repeat a rule_id")
+    effects = {rule["effect"] for rule in policy["matched_rules"]}
+    expected = next((effect for effect in ("deny", "require_approval", "auto_approve") if effect in effects), "deny")
+    if policy.get("outcome") != expected:
+        errors.append(f"policy outcome does not follow its matched rules (expected {expected})")
+    return errors
+
+
 def policy_outcome_errors(
     request: dict[str, Any], approvals: list[dict[str, Any]], dispatches: list[dict[str, Any]]
 ) -> list[str]:
     """Only an explicit, closed policy outcome may select an approval path."""
-    errors: list[str] = []
+    errors = policy_rule_errors(request["policy"])
     outcome = request["policy"].get("outcome")
     auto_approvals = [item for item in approvals if item["decision"] == "auto_approved"]
     if auto_approvals and outcome != "auto_approve":
@@ -1444,6 +1459,10 @@ def record_errors(kind: str, record: Any) -> list[str]:
         errors.append(f"{location}: {error.message}")
     if not errors and kind == "approval-record":
         errors.extend(webauthn_signature_errors(record))
+    if not errors and kind == "approval-policy":
+        errors.extend(policy_rule_errors(record))
+    if not errors and kind == "approval-request":
+        errors.extend(policy_rule_errors(record["policy"]))
     return errors
 
 

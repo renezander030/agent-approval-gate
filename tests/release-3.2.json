@@ -9,6 +9,11 @@
       "name": "file.write reference payload",
       "schema": "schemas/actions/file.write.schema.json",
       "instance": "examples/actions/file.write.json"
+    },
+    {
+      "name": "policy outcome with its matched rules",
+      "schema": "schemas/approval-policy.schema.json",
+      "instance": "examples/approval-policy-rules.json"
     }
   ],
   "negative": [
@@ -123,6 +128,19 @@
           "op": "replace",
           "path": "/effects/destructive",
           "value": true
+        }
+      ]
+    },
+    {
+      "name": "matched rule effect outside the closed set",
+      "schema": "schemas/approval-policy.schema.json",
+      "instance": "examples/approval-policy-rules.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/matched_rules/0/effect",
+          "value": "allow"
         }
       ]
     }

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import contextlib
+import io
+import json
 import sys
+import tempfile
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -11,7 +15,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from generate_examples import refresh_audit  # noqa: E402
 from test_release_3_1 import rebind  # noqa: E402
 from validate_contracts import (  # noqa: E402
-    digest, effect_errors, load, schema_catalog, validate_envelope, validator_for,
+    digest, effect_errors, load, main, policy_rule_errors, schema_catalog, validate_envelope, validator_for,
 )
 
 LOCAL_ACTION_TYPES = ("shell.exec", "file.write")
@@ -108,6 +112,43 @@ class EffectHintTests(unittest.TestCase):
                 request["policy"]["requirements"]["human_required_effects"] = required
                 errors = effect_errors(self.envelope["proposal"], [], request, [approval])
                 self.assertEqual(any("require a human approval" in error for error in errors), fires)
+
+
+class RulePrecedenceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.policy = load("examples/approval-policy-rules.json")
+
+    def test_deny_beats_ask_beats_auto_approve(self) -> None:
+        for effects, expected in (
+            (["auto_approve"], "auto_approve"),
+            (["auto_approve", "require_approval"], "require_approval"),
+            (["require_approval", "deny", "auto_approve"], "deny"),
+            ([], "deny"),
+        ):
+            with self.subTest(effects=effects):
+                self.policy["matched_rules"] = [{"rule_id": f"rule.{index}", "effect": effect} for index, effect in enumerate(effects)]
+                for outcome in ("require_approval", "auto_approve", "deny"):
+                    self.policy["outcome"] = outcome
+                    self.assertEqual(policy_rule_errors(self.policy) == [], outcome == expected)
+
+    def test_rule_ids_are_unique(self) -> None:
+        self.policy["matched_rules"].append(deepcopy(self.policy["matched_rules"][0]))
+        self.assertIn("policy matched_rules repeat a rule_id", policy_rule_errors(self.policy))
+
+    def test_lifecycle_outcome_follows_its_rules(self) -> None:
+        envelope = load("examples/approval-envelope.json")
+        envelope["request"]["policy"]["matched_rules"] = [{"rule_id": "rule.email.blocked-domain", "effect": "deny"}]
+        refresh_audit(envelope)
+        self.assertIn("policy outcome does not follow its matched rules (expected deny)", validate_envelope(envelope))
+
+    def test_standalone_policy_record_is_checked(self) -> None:
+        self.policy["outcome"] = "auto_approve"
+        self.policy["requirements"]["allow_auto_approval"] = True
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "policy.json"
+            path.write_text(json.dumps(self.policy), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["--record", "approval-policy", str(path)]), 1)
 
 
 class PromptChannelTests(unittest.TestCase):
