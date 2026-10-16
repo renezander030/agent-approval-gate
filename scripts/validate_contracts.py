@@ -699,14 +699,33 @@ def precondition_errors(
 RISK_ORDER = {"low": 0, "medium": 1, "high": 2}
 
 
+def delegated_agents(proposal: dict[str, Any]) -> set[str]:
+    return {hop["agent"]["identity"] for hop in proposal["delegation_chain"]}
+
+
+def separation_conflicts(identifier: str, request: dict[str, Any], agents: set[str]) -> set[str]:
+    """Which separation-of-duties rules bar this identity from deciding the request, given its delegated agents."""
+    separation = request["policy"]["requirements"]["separation_of_duties"]
+    conflicts: set[str] = set()
+    if separation["requester_must_not_approve"] and identifier == request["requested_by"]["identifier"]:
+        conflicts.add("requester")
+    if separation["agent_must_not_approve"] and identifier in agents:
+        conflicts.add("agent")
+    if identifier in set(separation.get("excluded_actor_ids", [])):
+        conflicts.add("excluded")
+    eligible = set(separation.get("eligible_approver_ids", []))
+    if eligible and identifier not in eligible:
+        conflicts.add("ineligible")
+    return conflicts
+
+
 def standing_grant_errors(
     proposal: dict[str, Any], request: dict[str, Any], approvals: list[dict[str, Any]]
 ) -> list[str]:
     """An auto approval under a standing grant stays inside what the granting human allowed."""
     errors: list[str] = []
     requirements = request["policy"]["requirements"]
-    separation = requirements["separation_of_duties"]
-    delegated_agents = {hop["agent"]["identity"] for hop in proposal["delegation_chain"]}
+    agents = delegated_agents(proposal)
     for approval in approvals:
         grant = approval.get("standing_grant")
         label = f"approval {approval['approval_id']}"
@@ -726,13 +745,10 @@ def standing_grant_errors(
             errors.append(f"{label} standing grant does not cover {proposal['risk']} risk")
         if grant["use_number"] > grant["max_uses"]:
             errors.append(f"{label} standing grant is used beyond its max_uses")
-        grantor = grant["granted_by"]["identifier"]
-        if separation["agent_must_not_approve"] and grantor in delegated_agents:
-            errors.append(f"{label} standing grant was issued by the delegated agent")
-        if separation["requester_must_not_approve"] and grantor == request["requested_by"]["identifier"]:
-            errors.append(f"{label} standing grant was issued by the requester")
-        if grantor in set(separation.get("excluded_actor_ids", [])):
-            errors.append(f"{label} standing grant was issued by an excluded actor")
+        conflicts = separation_conflicts(grant["granted_by"]["identifier"], request, agents)
+        for conflict, issuer in (("agent", "the delegated agent"), ("requester", "the requester"), ("excluded", "an excluded actor")):
+            if conflict in conflicts:
+                errors.append(f"{label} standing grant was issued by {issuer}")
     return errors
 
 
@@ -1045,12 +1061,8 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
         errors.append("signature-required channels must also be allowed channels")
     required_roles = set(requirements.get("required_roles", []))
     separation = requirements["separation_of_duties"]
-    eligible_approvers = set(separation.get("eligible_approver_ids", []))
-    excluded_actors = set(separation.get("excluded_actor_ids", []))
     excluded_keys = set(separation.get("excluded_key_ids", []))
-    delegated_agent_ids = {
-        hop["agent"]["identity"] for hop in proposal["delegation_chain"]
-    }
+    agents = delegated_agents(proposal)
     observed_signing_keys: set[str] = set()
     delivered_channels = {
         item["channel"] for item in request["channels"] if item["delivery_status"] == "delivered"
@@ -1076,14 +1088,14 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
         if approval["channel"] in signature_channels:
             if not approval.get("signatures"):
                 errors.append(f"approval {approval['approval_id']} lacks a required signature")
-        if separation["requester_must_not_approve"]:
-            if approver_id == request["requested_by"]["identifier"]:
-                errors.append("requester cannot approve its own request")
-        if separation["agent_must_not_approve"] and approver_id in delegated_agent_ids:
+        conflicts = separation_conflicts(approver_id, request, agents)
+        if "requester" in conflicts:
+            errors.append("requester cannot approve its own request")
+        if "agent" in conflicts:
             errors.append("delegated agent cannot approve its own action")
-        if approver_id in excluded_actors:
+        if "excluded" in conflicts:
             errors.append(f"approval actor {approver_id} is excluded by policy")
-        if eligible_approvers and approver_id not in eligible_approvers:
+        if "ineligible" in conflicts:
             errors.append(f"approval actor {approver_id} is not eligible under policy")
         for signature in approval.get("signatures", []):
             key_id = signature["key_id"]
@@ -1547,6 +1559,15 @@ RECORD_SCHEMAS = {
 }
 
 
+# Rules a standalone record can prove without the rest of its lifecycle.
+RECORD_SELF_CHECKS = {
+    "approval-record": webauthn_signature_errors,
+    "dispatch-record": execution_grant_errors,
+    "approval-policy": policy_snapshot_errors,
+    "approval-request": lambda record: policy_snapshot_errors(record["policy"]),
+}
+
+
 def record_errors(kind: str, record: Any) -> list[str]:
     """Structural validation of one standalone record, plus its own proof when present."""
     schemas, registry = schema_catalog()
@@ -1555,14 +1576,8 @@ def record_errors(kind: str, record: Any) -> list[str]:
     for error in sorted(validator.iter_errors(record), key=lambda item: list(item.path)):
         location = "/".join(str(part) for part in error.path) or "<root>"
         errors.append(f"{location}: {error.message}")
-    if not errors and kind == "approval-record":
-        errors.extend(webauthn_signature_errors(record))
-    if not errors and kind == "dispatch-record":
-        errors.extend(execution_grant_errors(record))
-    if not errors and kind == "approval-policy":
-        errors.extend(policy_snapshot_errors(record))
-    if not errors and kind == "approval-request":
-        errors.extend(policy_snapshot_errors(record["policy"]))
+    if not errors and kind in RECORD_SELF_CHECKS:
+        errors.extend(RECORD_SELF_CHECKS[kind](record))
     return errors
 
 

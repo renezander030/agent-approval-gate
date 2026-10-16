@@ -13,17 +13,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from generate_examples import rebind_action as rebind, refresh_audit  # noqa: E402
+from test_release_3_1 import renamed, schema_errors  # noqa: E402
 from validate_contracts import (  # noqa: E402
-    collection_errors, digest, effect_errors, execution_grant_manifest, load, main, policy_outcome_errors,
-    policy_snapshot_errors, schema_catalog, validate_envelope, validator_for,
+    collection_errors, digest, execution_grant_manifest, load, main, policy_outcome_errors,
+    policy_snapshot_errors, validate_envelope,
 )
 
 LOCAL_ACTION_TYPES = ("shell.exec", "file.write")
-
-
-def schema_errors(schema: str, instance: object) -> list[str]:
-    schemas, registry = schema_catalog()
-    return [error.message for error in validator_for(schema, schemas, registry).iter_errors(instance)]
 
 
 def rebind_approval(envelope: dict) -> dict:
@@ -96,21 +92,27 @@ class EffectHintTests(unittest.TestCase):
         self.assertTrue(schema_errors("schemas/proposed-action.schema.json", proposal))
 
     def test_undeclared_hints_are_conservative(self) -> None:
-        request = deepcopy(self.envelope["request"])
-        request["policy"]["outcome"] = "auto_approve"
-        request["policy"]["requirements"]["human_required_effects"] = ["destructive"]
-        proposal = {"effects": {"open_world": False}}
-        self.assertIn("effects destructive cannot be auto approved", effect_errors(proposal, [], request, []))
-        proposal["effects"]["destructive"] = False
-        self.assertEqual(effect_errors(proposal, [], request, []), [])
+        envelope = load("examples/standing-grant-envelope.json")
+        for declared, errors in (
+            (None, ["effects destructive cannot be auto approved", "effects destructive require a human approval"]),
+            ({"open_world": False}, ["effects destructive cannot be auto approved", "effects destructive require a human approval"]),
+            ({"destructive": False}, []),
+        ):
+            with self.subTest(declared=declared):
+                changed = deepcopy(envelope)
+                for record in (changed["proposal"], changed["review_snapshots"][0]["content"]):
+                    record.pop("effects")
+                    if declared:
+                        record["effects"] = deepcopy(declared)
+                changed = rebind(changed, "email.send", changed["proposal"]["payload"])
+                self.assertEqual(validate_envelope(changed), errors)
 
     def test_fired_effects_need_a_human(self) -> None:
-        request = deepcopy(self.envelope["request"])
-        approval = {"decision": "auto_approved", "decided_by": {"kind": "policy"}}
+        envelope = load("examples/standing-grant-envelope.json")
         for required, fires in ((["open_world"], True), (["not_idempotent"], False), (["not_read_only"], True), (["destructive"], False)):
             with self.subTest(required=required):
-                request["policy"]["requirements"]["human_required_effects"] = required
-                errors = effect_errors(self.envelope["proposal"], [], request, [approval])
+                envelope["request"]["policy"]["requirements"]["human_required_effects"] = required
+                errors = validate_envelope(envelope)
                 self.assertEqual(any("require a human approval" in error for error in errors), fires)
 
 
@@ -273,17 +275,6 @@ class TargetPreconditionTests(unittest.TestCase):
         envelope = load("examples/approval-envelope.json")
         envelope["dispatches"][0]["precondition_check"] = {"checked_at": "2026-04-28T09:14:33Z", "result": "matched"}
         self.refused(envelope, f"dispatch {envelope['dispatches'][0]['dispatch_id']} checks a precondition the action does not declare")
-
-
-def renamed(envelope: dict, suffix: str) -> dict:
-    envelope = deepcopy(envelope)
-    for record, field in ((envelope["proposal"], "proposal_id"), (envelope["proposal"], "call_id"),
-                          (envelope["proposal"], "idempotency_key"), (envelope["request"], "request_id"),
-                          (envelope["audit_snapshot"], "stream_id")):
-        record[field] += suffix
-    for dispatch in envelope["dispatches"]:
-        dispatch["dispatch_id"] += suffix
-    return envelope
 
 
 class StandingGrantTests(unittest.TestCase):

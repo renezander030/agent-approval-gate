@@ -51,6 +51,18 @@ def refresh_audit(envelope: dict[str, Any]) -> None:
     )
 
 
+def refuse_dispatch(envelope: dict[str, Any], reason: str, **changes: Any) -> dict[str, Any]:
+    """Turn the lifecycle's dispatch into a not_dispatched refusal, and its audit witness with it."""
+    dispatch = envelope["dispatches"][0]
+    dispatch.update(status="not_dispatched", reason=reason, **changes)
+    dispatch.pop("provider")
+    for event in envelope["audit_events"]:
+        if event["event_type"] == "dispatch.succeeded":
+            event.update(event_type="dispatch.not_dispatched", occurred_at=dispatch["completed_at"], recorded_at=dispatch["recorded_at"])
+            event["detail"] = {"action_hash": dispatch["action_hash"], "reason_code": reason}
+    return dispatch
+
+
 def rebind_action(envelope: dict[str, Any], action_type: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Move the reference lifecycle onto another action type and recompute every binding."""
     envelope = deepcopy(envelope)
@@ -138,19 +150,13 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
         "requested_changes": [{"path": "/payload/body_text", "note": "Remove the restore date and link the status page instead."}],
     }
     rejected["authority_snapshots"] = []
-    dispatch = rejected["dispatches"][0]
-    dispatch.update(status="not_dispatched", approval_ids=[], reason="approval_rejected")
-    dispatch.pop("authority_snapshot_id")
-    dispatch.pop("provider")
+    refuse_dispatch(rejected, "approval_rejected", approval_ids=[]).pop("authority_snapshot_id")
     rejected["audit_events"] = [e for e in rejected["audit_events"] if e["event_type"] != "authority.checked"]
     for event in rejected["audit_events"]:
         if event["event_type"] in {"approval.decided", "resolution.emitted"}:
             event["detail"]["decision"] = "rejected"
         if event["event_type"] == "resolution.emitted":
             event["detail"]["reason_code"] = resolution["agent_feedback"]["reason_code"]
-        if event["event_type"] == "dispatch.succeeded":
-            event["event_type"] = "dispatch.not_dispatched"
-            event["detail"] = {"action_hash": dispatch["action_hash"], "reason_code": "approval_rejected"}
     refresh_audit(rejected)
     write("rejected-envelope.json", rejected)
 
@@ -179,19 +185,13 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     revoker = deepcopy(revoked["approvals"][0]["decided_by"])
     request["revocation"] = {"revoked_at": revoked_at, "revoked_by": revoker, "reason_code": "target_changed", "safe_detail": "Customer replied on another thread before dispatch"}
     revoked["authority_snapshots"] = []
-    dispatch = revoked["dispatches"][0]
-    dispatch.update(status="not_dispatched", approval_ids=[], reason="approval_revoked", started_at="2026-04-28T09:14:35Z", completed_at="2026-04-28T09:14:35Z", recorded_at="2026-04-28T09:14:35Z")
-    dispatch.pop("authority_snapshot_id")
-    dispatch.pop("provider")
+    refuse_dispatch(revoked, "approval_revoked", approval_ids=[], started_at="2026-04-28T09:14:35Z",
+                    completed_at="2026-04-28T09:14:35Z", recorded_at="2026-04-28T09:14:35Z").pop("authority_snapshot_id")
     events = [e for e in revoked["audit_events"] if e["event_type"] != "authority.checked"]
     revocation_event = deepcopy(next(e for e in events if e["event_type"] == "approval.decided"))
     revocation_event.update(event_id="event_revoked_01", event_type="approval.revoked", occurred_at=revoked_at, recorded_at=revoked_at, actor=deepcopy(revoker), references={"request_id": request["request_id"]}, detail={"reason_code": "target_changed"})
-    for event in events:
-        if event["event_type"] == "dispatch.succeeded":
-            event.update(event_type="dispatch.not_dispatched", occurred_at=dispatch["completed_at"], recorded_at=dispatch["recorded_at"])
-            event["references"].pop("approval_id")
-            event["detail"] = {"action_hash": dispatch["action_hash"], "reason_code": "approval_revoked"}
     index = next(i for i, e in enumerate(events) if e["event_type"] == "dispatch.not_dispatched")
+    events[index]["references"].pop("approval_id")
     events.insert(index, revocation_event)
     revoked["audit_events"] = events
     refresh_audit(revoked)
@@ -243,14 +243,8 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     write("precondition-envelope.json", guarded)
 
     stale = deepcopy(guarded)
-    dispatch = stale["dispatches"][0]
-    dispatch.update(status="not_dispatched", reason="precondition_failed")
-    dispatch.pop("provider")
+    dispatch = refuse_dispatch(stale, "precondition_failed")
     dispatch["precondition_check"].update(result="changed", observed_hash=digest_value("exports:\n  per_minute: 30\n"))
-    for event in stale["audit_events"]:
-        if event["event_type"] == "dispatch.succeeded":
-            event["event_type"] = "dispatch.not_dispatched"
-            event["detail"] = {"action_hash": dispatch["action_hash"], "reason_code": "precondition_failed"}
     refresh_audit(stale)
     write("precondition-failed-envelope.json", stale)
 
