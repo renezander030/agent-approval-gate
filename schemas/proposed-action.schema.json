@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/proposed-action.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.2.0/schemas/proposed-action.schema.json",
   "title": "ProposedAction",
   "description": "An immutable, serializable action draft. The RFC 8785 SHA-256 digest of this complete document is the action_hash carried through approval and dispatch.",
   "type": "object",
@@ -50,7 +50,9 @@
         "ticket.create",
         "db.update_row",
         "api.call",
-        "n8n.trigger_workflow"
+        "n8n.trigger_workflow",
+        "shell.exec",
+        "file.write"
       ]
     },
     "payload_schema": {
@@ -70,6 +72,8 @@
     "tenant": {"type": "string", "minLength": 1, "maxLength": 64},
     "risk": {"type": "string", "enum": ["low", "medium", "high"]},
     "idempotency_key": {"$ref": "common.schema.json#/$defs/identifier"},
+    "effects": {"$ref": "common.schema.json#/$defs/effect_hints"},
+    "target_precondition": {"$ref": "common.schema.json#/$defs/target_precondition"},
     "review_evidence": {
       "type": "array",
       "maxItems": 20,
@@ -129,6 +133,24 @@
       },
       "then": {
         "properties": {"payload": {"$ref": "actions/n8n.trigger_workflow.schema.json"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"action_type": {"const": "shell.exec"}},
+        "required": ["action_type"]
+      },
+      "then": {
+        "properties": {"payload": {"$ref": "actions/shell.exec.schema.json"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"action_type": {"const": "file.write"}},
+        "required": ["action_type"]
+      },
+      "then": {
+        "properties": {"payload": {"$ref": "actions/file.write.schema.json"}}
       }
     }
   ]

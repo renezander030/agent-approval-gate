@@ -2,8 +2,8 @@
 
 ## Versioning
 
-The release version and every schema's `schema_version` are `3.1.0`. Schema `$id`
-values resolve through the immutable `v3.1.0` tag. A consumer may cache schemas by
+The release version and every schema's `schema_version` are `3.2.0`. Schema `$id`
+values resolve through the immutable `v3.2.0` tag. A consumer may cache schemas by
 `$id`; it must not replace a cached release schema with content from `main`.
 
 - Patch releases may clarify descriptions and add compatible examples or tests.
@@ -192,6 +192,104 @@ proposal, request, dispatch, and audit-stream identities unique, admit at most o
 approval request per tenant and `call_id`, and bind each tenant `idempotency_key` to a
 single original action hash. Pass several envelopes to the validator to check the set.
 
+## Version 3.2 additions
+
+### Policy rules and an unavailable evaluator
+
+`ApprovalPolicySnapshot.matched_rules` lists every rule that matched the action, each
+with a `deny`, `require_approval`, or `auto_approve` effect. The outcome follows a
+fixed precedence: `deny` when any rule denies, otherwise `require_approval` when any
+rule asks, otherwise `auto_approve`. An empty list is `deny`; no matching rule is
+never permission. Rule IDs are unique within one snapshot.
+
+`evaluation_status: "evaluator_unavailable"` records an evaluator that errored, timed
+out, or returned no verdict. Such a snapshot carries no matched rules and its outcome
+is `deny`, unless `requirements.on_evaluator_unavailable` is
+`require_human_approval`, which lets the outcome be `require_approval` so a human
+decides. It is never `auto_approve`.
+
+### Effect hints
+
+`ProposedAction.effects` records `read_only`, `destructive`, `idempotent`, and
+`open_world` hints, the same four MCP tool annotations carry. They are part of the
+hashed action, and every review snapshot shows them unchanged. A hint that is not
+declared takes the conservative value: not read-only, destructive, not idempotent,
+open-world. An action cannot be both read-only and destructive.
+
+`requirements.human_required_effects` names effects that need a human: `destructive`
+and `open_world` fire on a true hint, `not_idempotent` and `not_read_only` on a false
+one. When one fires, the outcome cannot be `auto_approve` and every approving
+decision must come from a human.
+
+### Standing grants
+
+A standing grant is a human's decision that policy may approve a bounded class of
+actions for a while. An `auto_approved` `ApprovalRecord` cites it in `standing_grant`
+with the granting human, `granted_at`, `expires_at`, a scope (tenant, action types,
+maximum risk), `max_uses`, and the `use_number` this approval consumes. The validator
+requires that:
+
+- the grant was in force when the decision was made;
+- the scope covers the action's tenant, type, and risk;
+- the use number does not exceed `max_uses`;
+- the granting human is not the delegated agent, the requester, or an excluded actor.
+
+`requirements.require_standing_grant` makes a grant mandatory for every auto
+approval. A grant does not override `human_required_effects`. Across a set of
+envelopes each use number is consumed once and a grant's terms never change.
+
+### Target preconditions
+
+`ProposedAction.target_precondition` names the state of the target the approver saw:
+a `resource` and its expected `version`, `etag`, or `content_digest`. It is part of
+the hashed action, and every review snapshot shows it unchanged. Before each provider
+invocation the dispatcher checks it, as HTTP `If-Match` does, and records
+`DispatchRecord.precondition_check` with `matched`, `changed`, or `unavailable`. Only
+a `matched` check made before the invocation started may reach the provider. A
+changed or unreadable target ends as `not_dispatched` with reason
+`precondition_failed`; the consumed approval is spent and a new action needs a new
+proposal. A dispatch never checks a precondition the action does not declare.
+
+### Execution grants
+
+`DispatchRecord.execution_grant` is what the dispatcher hands the provider or tool
+with the invocation. Its `digest` is the RFC 8785/SHA-256 digest of this manifest,
+with the values copied from the dispatch record and `approval_ids` sorted:
+
+```json
+{
+  "action_hash": "sha256:...",
+  "approval_ids": ["approval_..."],
+  "attempt": 1,
+  "authority_snapshot_id": "authority_...",
+  "dispatch_id": "dispatch_...",
+  "idempotency_key": "idem_...",
+  "proposal_id": "prop_...",
+  "request_id": "req_..."
+}
+```
+
+It is issued after the authority check and before the invocation. A provider or tool
+recomputes the digest from the identities it receives and refuses a call whose grant
+does not match, so a replayed or forged call is distinguishable from the approved
+one. Refusals and reconciliation records carry no grant.
+`requirements.require_execution_grant` makes it mandatory for every invocation.
+
+### Local actions and prompt channels
+
+`shell.exec` and `file.write` are built-in action types with reference schemas. A
+command is an argument vector run without a shell; its review target is the command,
+its absolute working directory, and the execution environment. A file write names
+its absolute path (without `..` segments), environment, and mode; `patch` carries a
+unified diff, every other mode carries the replacement text.
+
+`teams` and `cli` join the channel set. Like `mcp_elicitation`, a decision on either
+names a present, authenticated human and answers a prompt the request delivered on
+that channel.
+
+See [framework-mapping.md](framework-mapping.md) for where these records come from in
+common agent frameworks.
+
 ## WebAuthn approval proof
 
 `webauthn-es256` is an optional signature profile for authenticated web approvals.
@@ -330,7 +428,7 @@ match the exported range exactly.
 The repository's `action.yml` runs the same checks in GitHub Actions:
 
 ```yaml
-- uses: renezander030/agent-approval-gate@v3.1.0
+- uses: renezander030/agent-approval-gate@v3.2.0
   with:
     envelopes: |
       out/envelope.json
@@ -356,3 +454,5 @@ any implementation language.
 
 `tests/release-3.1.json` adds portable vectors for policy outcomes, revocation, agent
 feedback, the MCP elicitation channel, and the reference action schemas.
+`tests/release-3.2.json` covers rule precedence, effect hints, standing grants, target
+preconditions, execution grants, and the local action schemas.

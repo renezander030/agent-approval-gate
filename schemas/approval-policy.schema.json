@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/approval-policy.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.2.0/schemas/approval-policy.schema.json",
   "title": "ApprovalPolicySnapshot",
   "description": "Immutable evidence of the policy revision and material inputs that selected an approval path.",
   "type": "object",
@@ -24,9 +24,28 @@
     "material_input_hash": {"$ref": "common.schema.json#/$defs/digest"},
     "evaluated_at": {"type": "string", "format": "date-time"},
     "outcome": {
-      "description": "The evaluator's closed decision for this action. Record any other evaluator result, including a non-boolean, unknown, or errored result, as deny.",
+      "description": "The evaluator's closed decision for this action. Record any other evaluator result, including a non-boolean, unknown, or errored result, as deny. When matched_rules is present, the outcome must follow their precedence.",
       "type": "string",
       "enum": ["require_approval", "auto_approve", "deny"]
+    },
+    "evaluation_status": {
+      "description": "decided when the evaluator returned a verdict; evaluator_unavailable when it errored, timed out, or returned no verdict.",
+      "type": "string",
+      "enum": ["decided", "evaluator_unavailable"]
+    },
+    "matched_rules": {
+      "description": "Every policy rule that matched this action, with its effect. The outcome is deny when any rule denies, otherwise require_approval when any rule asks, otherwise auto_approve; no matched rule is deny.",
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "required": ["rule_id", "effect"],
+        "additionalProperties": false,
+        "properties": {
+          "rule_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+          "effect": {"type": "string", "enum": ["deny", "require_approval", "auto_approve"]}
+        }
+      }
     },
     "outcome_reason": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 500},
     "requirements": {
@@ -50,7 +69,7 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "policy"]
+            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli", "policy"]
           }
         },
         "signature_required_channels": {
@@ -58,10 +77,29 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "policy"]
+            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli", "policy"]
           }
         },
         "allow_auto_approval": {"type": "boolean"},
+        "on_evaluator_unavailable": {
+          "description": "What an unavailable evaluator leads to: deny (the default), or require_human_approval to ask a human instead. It never leads to auto approval.",
+          "type": "string",
+          "enum": ["deny", "require_human_approval"]
+        },
+        "require_standing_grant": {
+          "description": "Every auto approval must cite a human's standing grant that covers the action.",
+          "type": "boolean"
+        },
+        "require_execution_grant": {
+          "description": "Every provider invocation must carry an execution grant bound to its dispatch.",
+          "type": "boolean"
+        },
+        "human_required_effects": {
+          "description": "Effects that require every approving decision to come from a human. destructive and open_world fire on a true hint; not_idempotent and not_read_only fire on a false hint. An undeclared hint takes its conservative value.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "enum": ["destructive", "open_world", "not_idempotent", "not_read_only"]}
+        },
         "required_roles": {
           "type": "array",
           "uniqueItems": true,
@@ -110,6 +148,13 @@
         "properties": {
           "requirements": {"properties": {"allow_auto_approval": {"const": true}}}
         }
+      }
+    },
+    {
+      "if": {"properties": {"evaluation_status": {"const": "evaluator_unavailable"}}, "required": ["evaluation_status"]},
+      "then": {
+        "properties": {"outcome": {"enum": ["deny", "require_approval"]}},
+        "not": {"required": ["matched_rules"]}
       }
     }
   ]

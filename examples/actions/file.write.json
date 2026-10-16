@@ -1,0 +1,6 @@
+{
+  "path": "/srv/builds/billing-service/config/rate-limits.yaml",
+  "environment": {"id": "ci-runner-07", "kind": "container"},
+  "mode": "patch",
+  "unified_diff": "--- a/config/rate-limits.yaml\n+++ b/config/rate-limits.yaml\n@@ -1,2 +1,2 @@\n exports:\n-  per_minute: 20\n+  per_minute: 50\n"
+}

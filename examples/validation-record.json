@@ -1,8 +1,8 @@
 {
-  "schema_version": "3.1.0",
+  "schema_version": "3.2.0",
   "validation_id": "validation_2026-04-28_841ac000",
   "proposal_id": "prop_2026-04-28_b3f1a2c4",
-  "action_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b",
+  "action_hash": "sha256:2991d5f888b4369ae368a0e1effa0d4c9e74fe4ddf8c607ab96849aba0b28691",
   "validator": {
     "kind": "system",
     "identifier": "approval-validator",

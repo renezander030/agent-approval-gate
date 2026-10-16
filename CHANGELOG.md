@@ -1,5 +1,52 @@
 # Changelog
 
+## 3.2.0
+
+Policies you can explain, pre-approvals with limits, and dispatches that prove which
+approval and which target state they ran on.
+
+### Added
+
+- `ApprovalPolicySnapshot.matched_rules`: every matching rule with its `deny`,
+  `require_approval`, or `auto_approve` effect. The outcome follows deny >
+  require_approval > auto_approve, and no matching rule is `deny`. Standalone policy
+  and request records are checked the same way.
+- `evaluation_status: evaluator_unavailable` with
+  `requirements.on_evaluator_unavailable`: an evaluator that cannot answer leads to
+  `deny`, or to a human approval when the policy opts in, and never to auto approval.
+- `ProposedAction.effects`: read-only, destructive, idempotent, and open-world hints
+  in the hashed action and every review snapshot, with
+  `requirements.human_required_effects` to require a human for chosen effects.
+- Standing grants: an auto approval cites a human's grant with expiry, tenant,
+  action types, maximum risk, a use ceiling, and the use it consumes, with
+  `requirements.require_standing_grant`. A set of envelopes consumes each use once.
+- `ProposedAction.target_precondition` and `DispatchRecord.precondition_check`: the
+  target version, ETag, or content digest the approver saw is checked before every
+  invocation, and a changed target ends as `not_dispatched` with
+  `precondition_failed`.
+- `DispatchRecord.execution_grant`: a digest over the dispatch's request, approvals,
+  action hash, authority snapshot, idempotency key, and attempt that a provider or
+  tool verifies before acting, with `requirements.require_execution_grant`.
+- `shell.exec` and `file.write` reference action schemas whose review target names
+  the command or path together with its directory and execution environment.
+- `teams` and `cli` approval channels for decisions on a Teams card or a terminal
+  prompt.
+- [`docs/framework-mapping.md`](docs/framework-mapping.md): where each record comes
+  from in LangGraph, the OpenAI Agents SDK, the Vercel AI SDK, Google ADK,
+  pydantic-ai, Mastra, MCP, and coding-agent hooks.
+- Complete [standing-grant](examples/standing-grant-envelope.json),
+  [precondition](examples/precondition-envelope.json),
+  [precondition-failed](examples/precondition-failed-envelope.json), and
+  [execution-grant](examples/granted-envelope.json) lifecycles, and portable vectors
+  in `tests/release-3.2.json`.
+
+### Compatibility
+
+Every addition is optional on existing records, and the new enum values extend
+closed sets. Schema IDs and `schema_version` move to `3.2.0`; continue validating
+stored v3.1 records with the v3.1.0 schemas and do not relabel them. Records produced
+under 3.2 must cite the v3.2.0 payload schema ID and digest.
+
 ## 3.1.0
 
 Approval paths that fail closed, approvals that can be withdrawn until dispatch, and

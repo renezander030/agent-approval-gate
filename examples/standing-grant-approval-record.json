@@ -1,0 +1,55 @@
+{
+  "schema_version": "3.2.0",
+  "approval_id": "approval_2026-04-28_f9821000",
+  "request_id": "req_2026-04-28_6a2d8800",
+  "proposal_id": "prop_2026-04-28_b3f1a2c4",
+  "request_revision": 1,
+  "action_hash": "sha256:2f1d8ff9e7c14a24bffb22604e072053d9a323633ec2bc372df625c0aa013822",
+  "payload_hash": "sha256:c919182dcf3aa49d95f5927636aeb7a6a227fa9f9b3daa7384ac4c531a9f891b",
+  "review_snapshot_id": "review_2026-04-28_47b2c000",
+  "review_content_hash": "sha256:f083f7bfda27308336553a5d759f39a1c8279a162dc870471a0595a5942ebf70",
+  "decision": "auto_approved",
+  "decided_by": {
+    "kind": "policy",
+    "identifier": "policy.high-risk-email.v1",
+    "authentication": {
+      "method": "policy_engine",
+      "human_present": false,
+      "assurance": "high",
+      "authenticated_at": "2026-04-28T09:14:27Z"
+    }
+  },
+  "decided_at": "2026-04-28T09:14:27Z",
+  "recorded_at": "2026-04-28T09:14:27Z",
+  "channel": "policy",
+  "policy_evaluation_id": "eval_2026-04-28_1c4f8a00",
+  "standing_grant": {
+    "grant_id": "grant_2026-04-27_support-replies",
+    "granted_by": {
+      "kind": "human",
+      "identifier": "rene@acme-corp.example",
+      "display_name": "Rene Z.",
+      "roles": [
+        "customer-support"
+      ],
+      "authentication": {
+        "method": "signed_callback",
+        "human_present": true,
+        "assurance": "substantial",
+        "authenticated_at": "2026-04-28T09:14:30Z",
+        "evidence_ref": "mail-callback:mail_2026-04-28_3391"
+      }
+    },
+    "granted_at": "2026-04-27T16:02:00Z",
+    "expires_at": "2026-05-04T16:02:00Z",
+    "scope": {
+      "tenant": "acme-corp",
+      "action_types": [
+        "email.send"
+      ],
+      "max_risk": "medium"
+    },
+    "max_uses": 200,
+    "use_number": 14
+  }
+}

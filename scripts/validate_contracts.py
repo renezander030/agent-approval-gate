@@ -424,6 +424,28 @@ def validate_envelope(envelope: Any, schema_files: dict[str, Path] | None = None
         return ["envelope contains invalid semantic input"]
 
 
+def execution_grant_manifest(dispatch: dict[str, Any]) -> dict[str, Any]:
+    """The identities a provider or tool can check before it acts: one dispatch of one approved action."""
+    return {
+        "request_id": dispatch["request_id"],
+        "dispatch_id": dispatch["dispatch_id"],
+        "proposal_id": dispatch["proposal_id"],
+        "action_hash": dispatch["action_hash"],
+        "approval_ids": sorted(dispatch["approval_ids"]),
+        "authority_snapshot_id": dispatch["authority_snapshot_id"],
+        "idempotency_key": dispatch["idempotency_key"],
+        "attempt": dispatch["attempt"],
+    }
+
+
+def execution_grant_errors(dispatch: dict[str, Any]) -> list[str]:
+    if "execution_grant" not in dispatch:
+        return []
+    if dispatch["execution_grant"]["digest"] != digest(execution_grant_manifest(dispatch)):
+        return [f"dispatch {dispatch['dispatch_id']} execution grant does not bind this dispatch"]
+    return []
+
+
 def dispatch_history_errors(dispatches: list[dict[str, Any]], request: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     previous: dict[str, Any] | None = None
@@ -584,11 +606,28 @@ def audit_binding_errors(envelope: dict[str, Any]) -> list[str]:
     return errors
 
 
+def policy_snapshot_errors(policy: dict[str, Any]) -> list[str]:
+    """The recorded outcome follows the matched rules, and an unavailable evaluator never permits."""
+    errors: list[str] = []
+    if "matched_rules" in policy:
+        rule_ids = [rule["rule_id"] for rule in policy["matched_rules"]]
+        if len(rule_ids) != len(set(rule_ids)):
+            errors.append("policy matched_rules repeat a rule_id")
+        effects = {rule["effect"] for rule in policy["matched_rules"]}
+        expected = next((effect for effect in ("deny", "require_approval", "auto_approve") if effect in effects), "deny")
+        if policy.get("outcome") != expected:
+            errors.append(f"policy outcome does not follow its matched rules (expected {expected})")
+    fallback = policy["requirements"].get("on_evaluator_unavailable", "deny")
+    if policy.get("evaluation_status") == "evaluator_unavailable" and policy.get("outcome") != "deny" and fallback != "require_human_approval":
+        errors.append("unavailable evaluator must deny unless policy escalates to a human")
+    return errors
+
+
 def policy_outcome_errors(
     request: dict[str, Any], approvals: list[dict[str, Any]], dispatches: list[dict[str, Any]]
 ) -> list[str]:
     """Only an explicit, closed policy outcome may select an approval path."""
-    errors: list[str] = []
+    errors = policy_snapshot_errors(request["policy"])
     outcome = request["policy"].get("outcome")
     auto_approvals = [item for item in approvals if item["decision"] == "auto_approved"]
     if auto_approvals and outcome != "auto_approve":
@@ -600,6 +639,116 @@ def policy_outcome_errors(
             errors.append("denied policy outcome cannot carry an approving decision")
         if any(item["status"] != "not_dispatched" for item in dispatches):
             errors.append("denied policy outcome cannot invoke a provider")
+    return errors
+
+
+# An undeclared hint takes the conservative value, as MCP tool annotations default.
+EFFECT_DEFAULTS = {"read_only": False, "destructive": True, "idempotent": False, "open_world": True}
+EFFECT_TRIGGERS = {
+    "destructive": ("destructive", True), "open_world": ("open_world", True),
+    "not_idempotent": ("idempotent", False), "not_read_only": ("read_only", False),
+}
+
+
+def effect_errors(
+    proposal: dict[str, Any], review_snapshots: list[dict[str, Any]],
+    request: dict[str, Any], approvals: list[dict[str, Any]],
+) -> list[str]:
+    """Effect hints are shown to the approver as proposed, and chosen effects need a human."""
+    errors: list[str] = []
+    declared = proposal.get("effects")
+    for snapshot in review_snapshots:
+        if snapshot["content"].get("effects") != declared:
+            errors.append(f"review snapshot {snapshot['snapshot_id']} changes the effect hints")
+    hints = {**EFFECT_DEFAULTS, **(declared or {})}
+    required = request["policy"]["requirements"].get("human_required_effects", [])
+    fired = [name for name in required if hints[EFFECT_TRIGGERS[name][0]] == EFFECT_TRIGGERS[name][1]]
+    if fired:
+        if request["policy"].get("outcome") == "auto_approve":
+            errors.append("effects " + ", ".join(fired) + " cannot be auto approved")
+        if any(item["decision"] in {"approved", "auto_approved"} and item["decided_by"]["kind"] != "human" for item in approvals):
+            errors.append("effects " + ", ".join(fired) + " require a human approval")
+    return errors
+
+
+def precondition_errors(
+    proposal: dict[str, Any], review_snapshots: list[dict[str, Any]], dispatches: list[dict[str, Any]]
+) -> list[str]:
+    """The approver sees the expected target state, and only a matched check reaches the provider."""
+    errors: list[str] = []
+    expected = proposal.get("target_precondition")
+    for snapshot in review_snapshots:
+        if snapshot["content"].get("target_precondition") != expected:
+            errors.append(f"review snapshot {snapshot['snapshot_id']} changes the target precondition")
+    for dispatch in dispatches:
+        check = dispatch.get("precondition_check")
+        if expected is None:
+            if check is not None:
+                errors.append(f"dispatch {dispatch['dispatch_id']} checks a precondition the action does not declare")
+            continue
+        if dispatch["status"] in {"succeeded", "failed", "outcome_unknown"}:
+            if not check or check["result"] != "matched":
+                errors.append(f"dispatch {dispatch['dispatch_id']} invoked without a matched target precondition")
+            elif parse_time(check["checked_at"]) > parse_time(dispatch["started_at"]):
+                errors.append(f"dispatch {dispatch['dispatch_id']} checked its precondition after invocation")
+        if dispatch.get("reason") == "precondition_failed" and (not check or check["result"] == "matched"):
+            errors.append(f"dispatch {dispatch['dispatch_id']} refused on a precondition that matched")
+    return errors
+
+
+RISK_ORDER = {"low": 0, "medium": 1, "high": 2}
+
+
+def delegated_agents(proposal: dict[str, Any]) -> set[str]:
+    return {hop["agent"]["identity"] for hop in proposal["delegation_chain"]}
+
+
+def separation_conflicts(identifier: str, request: dict[str, Any], agents: set[str]) -> set[str]:
+    """Which separation-of-duties rules bar this identity from deciding the request, given its delegated agents."""
+    separation = request["policy"]["requirements"]["separation_of_duties"]
+    conflicts: set[str] = set()
+    if separation["requester_must_not_approve"] and identifier == request["requested_by"]["identifier"]:
+        conflicts.add("requester")
+    if separation["agent_must_not_approve"] and identifier in agents:
+        conflicts.add("agent")
+    if identifier in set(separation.get("excluded_actor_ids", [])):
+        conflicts.add("excluded")
+    eligible = set(separation.get("eligible_approver_ids", []))
+    if eligible and identifier not in eligible:
+        conflicts.add("ineligible")
+    return conflicts
+
+
+def standing_grant_errors(
+    proposal: dict[str, Any], request: dict[str, Any], approvals: list[dict[str, Any]]
+) -> list[str]:
+    """An auto approval under a standing grant stays inside what the granting human allowed."""
+    errors: list[str] = []
+    requirements = request["policy"]["requirements"]
+    agents = delegated_agents(proposal)
+    for approval in approvals:
+        grant = approval.get("standing_grant")
+        label = f"approval {approval['approval_id']}"
+        if grant is None:
+            if approval["decision"] == "auto_approved" and requirements.get("require_standing_grant"):
+                errors.append(f"{label} auto approval lacks a required standing grant")
+            continue
+        decided_at = parse_time(approval["decided_at"])
+        if not parse_time(grant["granted_at"]) <= decided_at < parse_time(grant["expires_at"]):
+            errors.append(f"{label} standing grant was not in force when it was used")
+        scope = grant["scope"]
+        if scope["tenant"] != proposal["tenant"]:
+            errors.append(f"{label} standing grant covers another tenant")
+        if proposal["action_type"] not in scope["action_types"]:
+            errors.append(f"{label} standing grant does not cover {proposal['action_type']}")
+        if RISK_ORDER[proposal["risk"]] > RISK_ORDER[scope["max_risk"]]:
+            errors.append(f"{label} standing grant does not cover {proposal['risk']} risk")
+        if grant["use_number"] > grant["max_uses"]:
+            errors.append(f"{label} standing grant is used beyond its max_uses")
+        conflicts = separation_conflicts(grant["granted_by"]["identifier"], request, agents)
+        for conflict, issuer in (("agent", "the delegated agent"), ("requester", "the requester"), ("excluded", "an excluded actor")):
+            if conflict in conflicts:
+                errors.append(f"{label} standing grant was issued by {issuer}")
     return errors
 
 
@@ -653,6 +802,10 @@ def audit_snapshot_errors(events: list[dict[str, Any]], snapshot: dict[str, Any]
     if parse_time(snapshot["captured_at"]) < parse_time(events[-1]["recorded_at"]):
         errors.append("audit snapshot predates its final event")
     return errors
+
+
+# Interactive channels where the approver answers a prompt the gate delivered.
+PROMPT_CHANNELS = {"mcp_elicitation": "an elicitation", "teams": "a Teams card", "cli": "a terminal prompt"}
 
 
 def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | None = None) -> list[str]:
@@ -890,6 +1043,9 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
 
     requirements = request["policy"]["requirements"]
     errors.extend(policy_outcome_errors(request, approvals, dispatches))
+    errors.extend(effect_errors(proposal, review_snapshots, request, approvals))
+    errors.extend(precondition_errors(proposal, review_snapshots, dispatches))
+    errors.extend(standing_grant_errors(proposal, request, approvals))
     if request["status"] in {"approved", "consumed"} and len(approved_records) < requirements["minimum_approvals"]:
         errors.append("approval quorum is not satisfied")
     if requirements["distinct_approvers"]:
@@ -905,19 +1061,15 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
         errors.append("signature-required channels must also be allowed channels")
     required_roles = set(requirements.get("required_roles", []))
     separation = requirements["separation_of_duties"]
-    eligible_approvers = set(separation.get("eligible_approver_ids", []))
-    excluded_actors = set(separation.get("excluded_actor_ids", []))
     excluded_keys = set(separation.get("excluded_key_ids", []))
-    delegated_agent_ids = {
-        hop["agent"]["identity"] for hop in proposal["delegation_chain"]
-    }
+    agents = delegated_agents(proposal)
     observed_signing_keys: set[str] = set()
     delivered_channels = {
         item["channel"] for item in request["channels"] if item["delivery_status"] == "delivered"
     }
     for approval in approvals:
-        if approval["channel"] == "mcp_elicitation" and "mcp_elicitation" not in delivered_channels:
-            errors.append(f"approval {approval['approval_id']} answers an elicitation that was never delivered")
+        if approval["channel"] in PROMPT_CHANNELS and approval["channel"] not in delivered_channels:
+            errors.append(f"approval {approval['approval_id']} answers {PROMPT_CHANNELS[approval['channel']]} that was never delivered")
     for approval in approved_records:
         approver_id = approval["decided_by"]["identifier"]
         if approval["channel"] not in allowed_channels:
@@ -936,14 +1088,14 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
         if approval["channel"] in signature_channels:
             if not approval.get("signatures"):
                 errors.append(f"approval {approval['approval_id']} lacks a required signature")
-        if separation["requester_must_not_approve"]:
-            if approver_id == request["requested_by"]["identifier"]:
-                errors.append("requester cannot approve its own request")
-        if separation["agent_must_not_approve"] and approver_id in delegated_agent_ids:
+        conflicts = separation_conflicts(approver_id, request, agents)
+        if "requester" in conflicts:
+            errors.append("requester cannot approve its own request")
+        if "agent" in conflicts:
             errors.append("delegated agent cannot approve its own action")
-        if approver_id in excluded_actors:
+        if "excluded" in conflicts:
             errors.append(f"approval actor {approver_id} is excluded by policy")
-        if eligible_approvers and approver_id not in eligible_approvers:
+        if "ineligible" in conflicts:
             errors.append(f"approval actor {approver_id} is not eligible under policy")
         for signature in approval.get("signatures", []):
             key_id = signature["key_id"]
@@ -1098,6 +1250,9 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
         if dispatch["attempt"] > dispatch["max_attempts"]:
             errors.append(f"dispatch {dispatch['dispatch_id']} exceeds max_attempts")
         started_at = parse_time(dispatch["started_at"])
+        errors.extend(execution_grant_errors(dispatch))
+        if requirements.get("require_execution_grant") and dispatch["status"] in invocation_statuses and "execution_grant" not in dispatch:
+            errors.append(f"dispatch {dispatch['dispatch_id']} lacks a required execution grant")
         authority = authority_by_id.get(dispatch.get("authority_snapshot_id"))
         if authority is None:
             if dispatch["status"] in invocation_statuses or "authority_snapshot_id" in dispatch:
@@ -1124,6 +1279,10 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
                 errors.append(
                     f"dispatch {dispatch['dispatch_id']} used inactive authority"
                 )
+            if "execution_grant" in dispatch:
+                issued_at = parse_time(dispatch["execution_grant"]["issued_at"])
+                if issued_at < checked_at or issued_at > started_at:
+                    errors.append(f"dispatch {dispatch['dispatch_id']} execution grant was issued outside its authority check and invocation")
             cited_approval_times = [
                 parse_time(approval_by_id[item]["recorded_at"])
                 for item in dispatch["approval_ids"]
@@ -1330,7 +1489,7 @@ def validate_repository() -> list[str]:
         if "/main/" in identifier:
             failures.append(f"{path}: $id points at mutable main")
 
-    for corpus_path in ("tests/conformance.json", "tests/adversarial.json", "tests/hardening.json", "tests/release-3.1.json"):
+    for corpus_path in ("tests/conformance.json", "tests/adversarial.json", "tests/hardening.json", "tests/release-3.1.json", "tests/release-3.2.json"):
         corpus = load(corpus_path)
         for vector in corpus["positive"]:
             validator = validator_for(vector["schema"], schemas, registry)
@@ -1400,6 +1559,15 @@ RECORD_SCHEMAS = {
 }
 
 
+# Rules a standalone record can prove without the rest of its lifecycle.
+RECORD_SELF_CHECKS = {
+    "approval-record": webauthn_signature_errors,
+    "dispatch-record": execution_grant_errors,
+    "approval-policy": policy_snapshot_errors,
+    "approval-request": lambda record: policy_snapshot_errors(record["policy"]),
+}
+
+
 def record_errors(kind: str, record: Any) -> list[str]:
     """Structural validation of one standalone record, plus its own proof when present."""
     schemas, registry = schema_catalog()
@@ -1408,8 +1576,8 @@ def record_errors(kind: str, record: Any) -> list[str]:
     for error in sorted(validator.iter_errors(record), key=lambda item: list(item.path)):
         location = "/".join(str(part) for part in error.path) or "<root>"
         errors.append(f"{location}: {error.message}")
-    if not errors and kind == "approval-record":
-        errors.extend(webauthn_signature_errors(record))
+    if not errors and kind in RECORD_SELF_CHECKS:
+        errors.extend(RECORD_SELF_CHECKS[kind](record))
     return errors
 
 
@@ -1468,8 +1636,9 @@ def collection_errors(envelopes: list[dict[str, Any]]) -> list[str]:
     """Identities that must stay unique across every lifecycle a deployment admitted."""
     errors: list[str] = []
     seen: dict[str, dict[Any, int]] = {
-        "proposal_id": {}, "request_id": {}, "call": {}, "dispatch_id": {}, "audit_stream": {},
+        "proposal_id": {}, "request_id": {}, "call": {}, "dispatch_id": {}, "audit_stream": {}, "grant_use": {},
     }
+    grants: dict[str, tuple[int, str]] = {}
     idempotency: dict[tuple[str, str], tuple[int, str]] = {}
 
     def claim(kind: str, key: Any, index: int, message: str) -> None:
@@ -1485,6 +1654,14 @@ def collection_errors(envelopes: list[dict[str, Any]]) -> list[str]:
         claim("audit_stream", envelope["audit_snapshot"]["stream_id"], index, "share one audit stream")
         for dispatch in envelope["dispatches"]:
             claim("dispatch_id", dispatch["dispatch_id"], index, "reuse dispatch_id")
+        for approval in envelope["approvals"]:
+            grant = approval.get("standing_grant")
+            if grant is None:
+                continue
+            terms = digest({key: value for key, value in grant.items() if key != "use_number"})
+            if grants.setdefault(grant["grant_id"], (index, terms))[1] != terms:
+                errors.append(f"envelopes {grants[grant['grant_id']][0]} and {index}: standing grant {grant['grant_id']} changes its terms")
+            claim("grant_use", (grant["grant_id"], grant["use_number"]), index, f"use standing grant {grant['grant_id']} number {grant['use_number']} twice")
         key = (proposal["tenant"], proposal["idempotency_key"])
         action_hash = digest(proposal)
         if key in idempotency and idempotency[key][1] != action_hash:

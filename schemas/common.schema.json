@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/common.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.2.0/schemas/common.schema.json",
   "title": "Agent Approval Gate common definitions",
   "$defs": {
     "schema_version": {
       "type": "string",
-      "const": "3.1.0"
+      "const": "3.2.0"
     },
     "identifier": {
       "type": "string",
@@ -222,6 +222,33 @@
           "then": {"not": {"required": ["value"]}}
         }
       ]
+    },
+    "effect_hints": {
+      "description": "What the action does to the world, as MCP tool annotations describe it. A hint that is not declared takes the conservative value: not read-only, destructive, not idempotent, open-world.",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "read_only": {"type": "boolean"},
+        "destructive": {"type": "boolean"},
+        "idempotent": {"type": "boolean"},
+        "open_world": {"type": "boolean"}
+      },
+      "not": {
+        "properties": {"read_only": {"const": true}, "destructive": {"const": true}},
+        "required": ["read_only", "destructive"]
+      }
+    },
+    "target_precondition": {
+      "description": "The state of the target the approver saw, checked by the dispatcher immediately before invocation, as HTTP If-Match does.",
+      "type": "object",
+      "required": ["resource", "kind", "expected"],
+      "additionalProperties": false,
+      "properties": {
+        "resource": {"$ref": "#/$defs/safe_text", "maxLength": 512},
+        "kind": {"type": "string", "enum": ["version", "etag", "content_digest"]},
+        "expected": {"$ref": "#/$defs/safe_text", "maxLength": 256}
+      }
     },
     "evidence_reference": {
       "type": "object",

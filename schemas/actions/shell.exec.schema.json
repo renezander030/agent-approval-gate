@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.2.0/schemas/actions/shell.exec.schema.json",
+  "title": "shell.exec payload",
+  "description": "Reference payload contract for one command run by a dispatcher-owned executor. The command is an argument vector executed without a shell, so the reviewed arguments are exactly what runs. The approver sees the command together with the directory and environment it runs in.",
+  "x-action-type": "shell.exec",
+  "x-review-target": ["command", "working_directory", "environment"],
+  "type": "object",
+  "required": ["command", "working_directory", "environment"],
+  "additionalProperties": false,
+  "properties": {
+    "command": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "^[^\\u0000]*$"}
+    },
+    "working_directory": {"type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?:/|[A-Za-z]:[\\\\/])[^\\u0000]*$"},
+    "environment": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "kind": {"type": "string", "enum": ["host", "sandbox", "container", "remote"]}
+      }
+    },
+    "tty": {"type": "boolean"},
+    "network": {"type": "string", "enum": ["none", "restricted", "full"]},
+    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 86400},
+    "environment_variable_names": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"}
+    }
+  }
+}

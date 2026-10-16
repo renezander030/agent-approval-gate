@@ -1,10 +1,10 @@
 {
-  "schema_version": "3.1.0",
+  "schema_version": "3.2.0",
   "snapshot_id": "review_2026-04-28_47b2c000",
   "proposal_id": "prop_2026-04-28_b3f1a2c4",
-  "action_hash": "sha256:bfe3494ebf07cf812fa4b5fc1720cac89f49def7a62f935b3c579e21c86e601b",
+  "action_hash": "sha256:2991d5f888b4369ae368a0e1effa0d4c9e74fe4ddf8c607ab96849aba0b28691",
   "payload_hash": "sha256:c919182dcf3aa49d95f5927636aeb7a6a227fa9f9b3daa7384ac4c531a9f891b",
-  "content_hash": "sha256:1496a0bf99cb54f169a7deb5e57ec48be882f1859fbd39cc2014563d3a250636",
+  "content_hash": "sha256:8c01b7a1cb615599ad2a3e2f36a282099ae522ed9115b14a7aec593be55b0d00",
   "rendered_at": "2026-04-28T09:14:26Z",
   "renderer": {
     "name": "approval-email-renderer",
@@ -38,6 +38,12 @@
       "ticket_id": "ZD-48211"
     },
     "risk": "high",
+    "effects": {
+      "read_only": false,
+      "destructive": false,
+      "idempotent": true,
+      "open_world": true
+    },
     "expires_at": "2026-04-28T17:14:23Z",
     "policy_summary": "One distinct customer-support approver; email decisions require a signature."
   }

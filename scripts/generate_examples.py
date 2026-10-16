@@ -14,7 +14,9 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from validate_contracts import digest as digest_value, encode_base64url as base64url  # noqa: E402
+from validate_contracts import (  # noqa: E402
+    digest as digest_value, encode_base64url as base64url, execution_grant_manifest,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,6 +49,60 @@ def refresh_audit(envelope: dict[str, Any]) -> None:
         entry_count=len(events), first_sequence=1, last_sequence=len(events),
         events_digest=digest_value(events), root_event_hash=previous,
     )
+
+
+def refuse_dispatch(envelope: dict[str, Any], reason: str, **changes: Any) -> dict[str, Any]:
+    """Turn the lifecycle's dispatch into a not_dispatched refusal, and its audit witness with it."""
+    dispatch = envelope["dispatches"][0]
+    dispatch.update(status="not_dispatched", reason=reason, **changes)
+    dispatch.pop("provider")
+    for event in envelope["audit_events"]:
+        if event["event_type"] == "dispatch.succeeded":
+            event.update(event_type="dispatch.not_dispatched", occurred_at=dispatch["completed_at"], recorded_at=dispatch["recorded_at"])
+            event["detail"] = {"action_hash": dispatch["action_hash"], "reason_code": reason}
+    return dispatch
+
+
+def rebind_action(envelope: dict[str, Any], action_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Move the reference lifecycle onto another action type and recompute every binding."""
+    envelope = deepcopy(envelope)
+    proposal = envelope["proposal"]
+    schema_path = SCHEMAS / "actions" / f"{action_type}.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    proposal.update(action_type=action_type, payload=deepcopy(payload))
+    proposal["payload_schema"] = {
+        "id": schema["$id"],
+        "version": envelope["schema_version"],
+        "digest": digest_file(schema_path),
+    }
+    action_hash, payload_hash = digest_value(proposal), digest_value(payload)
+    envelope["validations"][0]["action_hash"] = action_hash
+    envelope["request"]["action_hash"] = action_hash
+    envelope["request"]["policy"]["material_input_hash"] = action_hash
+    review = envelope["review_snapshots"][0]
+    review["content"].update(
+        action_type=action_type, arguments=deepcopy(payload),
+        target={key: payload[key] for key in schema["x-review-target"] if key in payload},
+    )
+    review.update(action_hash=action_hash, payload_hash=payload_hash, content_hash=digest_value(review["content"]))
+    approval = envelope["approvals"][0]
+    approval.update(action_hash=action_hash, payload_hash=payload_hash, review_content_hash=review["content_hash"])
+    envelope["resolutions"][0].update(action_hash=action_hash, approval_record_hash=digest_value(approval))
+    authority = envelope["authority_snapshots"][0]
+    authority["action_hash"] = action_hash
+    for subject in authority["subjects"]:
+        subject["scopes"] = [action_type if scope == "email.send" else scope for scope in subject.get("scopes", [])]
+    authority["authority_digest"] = digest_value(authority["subjects"])
+    envelope["dispatches"][0]["action_hash"] = action_hash
+    for event in envelope["audit_events"]:
+        if "action_hash" in event["detail"]:
+            event["detail"]["action_hash"] = action_hash
+        if "payload_hash" in event["detail"]:
+            event["detail"]["payload_hash"] = payload_hash
+        if "review_content_hash" in event["detail"]:
+            event["detail"]["review_content_hash"] = review["content_hash"]
+    refresh_audit(envelope)
+    return envelope
 
 
 def lifecycle_examples(base: dict[str, Any]) -> None:
@@ -94,19 +150,13 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
         "requested_changes": [{"path": "/payload/body_text", "note": "Remove the restore date and link the status page instead."}],
     }
     rejected["authority_snapshots"] = []
-    dispatch = rejected["dispatches"][0]
-    dispatch.update(status="not_dispatched", approval_ids=[], reason="approval_rejected")
-    dispatch.pop("authority_snapshot_id")
-    dispatch.pop("provider")
+    refuse_dispatch(rejected, "approval_rejected", approval_ids=[]).pop("authority_snapshot_id")
     rejected["audit_events"] = [e for e in rejected["audit_events"] if e["event_type"] != "authority.checked"]
     for event in rejected["audit_events"]:
         if event["event_type"] in {"approval.decided", "resolution.emitted"}:
             event["detail"]["decision"] = "rejected"
         if event["event_type"] == "resolution.emitted":
             event["detail"]["reason_code"] = resolution["agent_feedback"]["reason_code"]
-        if event["event_type"] == "dispatch.succeeded":
-            event["event_type"] = "dispatch.not_dispatched"
-            event["detail"] = {"action_hash": dispatch["action_hash"], "reason_code": "approval_rejected"}
     refresh_audit(rejected)
     write("rejected-envelope.json", rejected)
 
@@ -135,19 +185,13 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     revoker = deepcopy(revoked["approvals"][0]["decided_by"])
     request["revocation"] = {"revoked_at": revoked_at, "revoked_by": revoker, "reason_code": "target_changed", "safe_detail": "Customer replied on another thread before dispatch"}
     revoked["authority_snapshots"] = []
-    dispatch = revoked["dispatches"][0]
-    dispatch.update(status="not_dispatched", approval_ids=[], reason="approval_revoked", started_at="2026-04-28T09:14:35Z", completed_at="2026-04-28T09:14:35Z", recorded_at="2026-04-28T09:14:35Z")
-    dispatch.pop("authority_snapshot_id")
-    dispatch.pop("provider")
+    refuse_dispatch(revoked, "approval_revoked", approval_ids=[], started_at="2026-04-28T09:14:35Z",
+                    completed_at="2026-04-28T09:14:35Z", recorded_at="2026-04-28T09:14:35Z").pop("authority_snapshot_id")
     events = [e for e in revoked["audit_events"] if e["event_type"] != "authority.checked"]
     revocation_event = deepcopy(next(e for e in events if e["event_type"] == "approval.decided"))
     revocation_event.update(event_id="event_revoked_01", event_type="approval.revoked", occurred_at=revoked_at, recorded_at=revoked_at, actor=deepcopy(revoker), references={"request_id": request["request_id"]}, detail={"reason_code": "target_changed"})
-    for event in events:
-        if event["event_type"] == "dispatch.succeeded":
-            event.update(event_type="dispatch.not_dispatched", occurred_at=dispatch["completed_at"], recorded_at=dispatch["recorded_at"])
-            event["references"].pop("approval_id")
-            event["detail"] = {"action_hash": dispatch["action_hash"], "reason_code": "approval_revoked"}
     index = next(i for i, e in enumerate(events) if e["event_type"] == "dispatch.not_dispatched")
+    events[index]["references"].pop("approval_id")
     events.insert(index, revocation_event)
     revoked["audit_events"] = events
     refresh_audit(revoked)
@@ -188,6 +232,71 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     refresh_audit(recovered)
     write("recovered-envelope.json", recovered)
 
+    payload = json.loads((EXAMPLES / "actions" / "file.write.json").read_text(encoding="utf-8"))
+    precondition = {"resource": payload["path"], "kind": "content_digest", "expected": digest_value("exports:\n  per_minute: 20\n")}
+    guarded = deepcopy(base)
+    guarded["proposal"]["target_precondition"] = precondition
+    guarded["review_snapshots"][0]["content"]["target_precondition"] = deepcopy(precondition)
+    guarded = rebind_action(guarded, "file.write", payload)
+    guarded["dispatches"][0]["precondition_check"] = {"checked_at": guarded["dispatches"][0]["started_at"], "result": "matched", "observed_hash": precondition["expected"]}
+    refresh_audit(guarded)
+    write("precondition-envelope.json", guarded)
+
+    stale = deepcopy(guarded)
+    dispatch = refuse_dispatch(stale, "precondition_failed")
+    dispatch["precondition_check"].update(result="changed", observed_hash=digest_value("exports:\n  per_minute: 30\n"))
+    refresh_audit(stale)
+    write("precondition-failed-envelope.json", stale)
+
+    standing = deepcopy(base)
+    standing["proposal"]["risk"] = "medium"
+    standing["review_snapshots"][0]["content"]["risk"] = "medium"
+    policy = standing["request"]["policy"]
+    policy.update(outcome="auto_approve", matched_rules=[{"rule_id": "rule.support.granted-reply", "effect": "auto_approve"}])
+    requirements = policy["requirements"]
+    requirements.update(human_only=False, allow_auto_approval=True, allowed_channels=["email", "web", "policy"],
+                        require_standing_grant=True, human_required_effects=["destructive"])
+    requirements.pop("required_roles")
+    requirements["separation_of_duties"].pop("eligible_approver_ids")
+    granter = deepcopy(standing["approvals"][0]["decided_by"])
+    approval = standing["approvals"][0]
+    approval.pop("signatures", None)
+    approval.pop("comment", None)
+    approval.update(
+        decision="auto_approved", channel="policy", decided_at="2026-04-28T09:14:27Z", recorded_at="2026-04-28T09:14:27Z",
+        decided_by={"kind": "policy", "identifier": policy["policy_id"], "authentication": {"method": "policy_engine", "human_present": False, "assurance": "high", "authenticated_at": "2026-04-28T09:14:27Z"}},
+        standing_grant={
+            "grant_id": "grant_2026-04-27_support-replies", "granted_by": granter,
+            "granted_at": "2026-04-27T16:02:00Z", "expires_at": "2026-05-04T16:02:00Z",
+            "scope": {"tenant": standing["proposal"]["tenant"], "action_types": ["email.send"], "max_risk": "medium"},
+            "max_uses": 200, "use_number": 14,
+        },
+    )
+    authority = standing["authority_snapshots"][0]
+    for subject in authority["subjects"]:
+        if subject["kind"] == "approver":
+            subject["identifier"] = policy["policy_id"]
+    authority["authority_digest"] = digest_value(authority["subjects"])
+    for event in standing["audit_events"]:
+        if event["event_type"] == "approval.decided":
+            event.update(actor=deepcopy(approval["decided_by"]), occurred_at=approval["decided_at"], recorded_at=approval["recorded_at"])
+            event["detail"].update(decision="auto_approved", channel="policy")
+            event["detail"].pop("wait_ms", None)
+        if event["event_type"] == "resolution.emitted":
+            event["detail"]["decision"] = "auto_approved"
+    standing["resolutions"][0]["decision"] = "auto_approved"
+    standing = rebind_action(standing, "email.send", standing["proposal"]["payload"])
+    write("standing-grant-envelope.json", standing)
+    write("standing-grant-approval-record.json", standing["approvals"][0])
+
+    granted = deepcopy(base)
+    granted["request"]["policy"]["requirements"]["require_execution_grant"] = True
+    dispatch = granted["dispatches"][0]
+    dispatch["execution_grant"] = {"digest": digest_value(execution_grant_manifest(dispatch)), "issued_at": dispatch["started_at"]}
+    write("granted-dispatch-record.json", dispatch)
+    refresh_audit(granted)
+    write("granted-envelope.json", granted)
+
 
 def main() -> None:
     proposal = load("email-reply-approval.json")
@@ -206,6 +315,12 @@ def main() -> None:
     policy = load("approval-policy.json")
     policy["material_input_hash"] = action_hash
     write("approval-policy.json", policy)
+    rule_trace = deepcopy(policy)
+    rule_trace["matched_rules"] = [
+        {"rule_id": "rule.email.external-recipient", "effect": "require_approval"},
+        {"rule_id": "rule.support.linked-ticket", "effect": "auto_approve"},
+    ]
+    write("approval-policy-rules.json", rule_trace)
 
     review_snapshot = load("review-snapshot.json")
     review_snapshot["action_hash"] = action_hash
@@ -326,7 +441,7 @@ def main() -> None:
             event["references"]["audit_snapshot_id"] = audit_snapshot["snapshot_id"]
 
     envelope = {
-        "schema_version": "3.1.0",
+        "schema_version": "3.2.0",
         "captured_at": "2026-04-28T09:14:35Z",
         "proposal": proposal,
         "validations": [validation],

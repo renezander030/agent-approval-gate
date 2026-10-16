@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.1.0/schemas/actions/crm.update_record.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.2.0/schemas/actions/crm.update_record.schema.json",
   "title": "crm.update_record payload",
   "description": "Reference payload contract for a CRM update dispatcher. The expected version lets the dispatcher refuse an update to a record that changed after review.",
   "x-action-type": "crm.update_record",
