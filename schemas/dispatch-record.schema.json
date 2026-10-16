@@ -73,7 +73,8 @@
         "approval_rejected",
         "approval_cancelled",
         "approval_revoked",
-        "request_failed"
+        "request_failed",
+        "precondition_failed"
       ]
     },
     "provider": {
@@ -102,6 +103,17 @@
         },
         "checked_at": {"type": "string", "format": "date-time"},
         "evidence": {"$ref": "common.schema.json#/$defs/evidence_reference"}
+      }
+    },
+    "precondition_check": {
+      "description": "The dispatcher's check of the proposal's target_precondition immediately before invocation.",
+      "type": "object",
+      "required": ["checked_at", "result"],
+      "additionalProperties": false,
+      "properties": {
+        "checked_at": {"type": "string", "format": "date-time"},
+        "result": {"type": "string", "enum": ["matched", "changed", "unavailable"]},
+        "observed_hash": {"$ref": "common.schema.json#/$defs/digest"}
       }
     },
     "execution_grant": {

@@ -25,6 +25,18 @@
       "name": "standalone dispatch record with an execution grant",
       "schema": "schemas/dispatch-record.schema.json",
       "instance": "examples/granted-dispatch-record.json"
+    },
+    {
+      "name": "file write guarded by a target precondition",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/precondition-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "file write refused because its target changed after review",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/precondition-failed-envelope.json",
+      "semantic": true
     }
   ],
   "negative": [
@@ -215,6 +227,46 @@
         {
           "op": "remove",
           "path": "/provider"
+        }
+      ]
+    },
+    {
+      "name": "invocation after the target changed",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/precondition-envelope.json",
+      "expect": "semantic",
+      "expect_error": "invoked without a matched target precondition",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/dispatches/0/precondition_check/result",
+          "value": "changed"
+        }
+      ]
+    },
+    {
+      "name": "invocation without checking the target precondition",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/precondition-envelope.json",
+      "expect": "semantic",
+      "expect_error": "invoked without a matched target precondition",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/dispatches/0/precondition_check"
+        }
+      ]
+    },
+    {
+      "name": "review hides the target precondition",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/precondition-envelope.json",
+      "expect": "semantic",
+      "expect_error": "changes the target precondition",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/review_snapshots/0/content/target_precondition"
         }
       ]
     }

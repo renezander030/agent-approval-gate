@@ -51,6 +51,48 @@ def refresh_audit(envelope: dict[str, Any]) -> None:
     )
 
 
+def rebind_action(envelope: dict[str, Any], action_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Move the reference lifecycle onto another action type and recompute every binding."""
+    envelope = deepcopy(envelope)
+    proposal = envelope["proposal"]
+    schema_path = SCHEMAS / "actions" / f"{action_type}.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    proposal.update(action_type=action_type, payload=deepcopy(payload))
+    proposal["payload_schema"] = {
+        "id": schema["$id"],
+        "version": envelope["schema_version"],
+        "digest": digest_file(schema_path),
+    }
+    action_hash, payload_hash = digest_value(proposal), digest_value(payload)
+    envelope["validations"][0]["action_hash"] = action_hash
+    envelope["request"]["action_hash"] = action_hash
+    envelope["request"]["policy"]["material_input_hash"] = action_hash
+    review = envelope["review_snapshots"][0]
+    review["content"].update(
+        action_type=action_type, arguments=deepcopy(payload),
+        target={key: payload[key] for key in schema["x-review-target"] if key in payload},
+    )
+    review.update(action_hash=action_hash, payload_hash=payload_hash, content_hash=digest_value(review["content"]))
+    approval = envelope["approvals"][0]
+    approval.update(action_hash=action_hash, payload_hash=payload_hash, review_content_hash=review["content_hash"])
+    envelope["resolutions"][0].update(action_hash=action_hash, approval_record_hash=digest_value(approval))
+    authority = envelope["authority_snapshots"][0]
+    authority["action_hash"] = action_hash
+    for subject in authority["subjects"]:
+        subject["scopes"] = [action_type if scope == "email.send" else scope for scope in subject.get("scopes", [])]
+    authority["authority_digest"] = digest_value(authority["subjects"])
+    envelope["dispatches"][0]["action_hash"] = action_hash
+    for event in envelope["audit_events"]:
+        if "action_hash" in event["detail"]:
+            event["detail"]["action_hash"] = action_hash
+        if "payload_hash" in event["detail"]:
+            event["detail"]["payload_hash"] = payload_hash
+        if "review_content_hash" in event["detail"]:
+            event["detail"]["review_content_hash"] = review["content_hash"]
+    refresh_audit(envelope)
+    return envelope
+
+
 def lifecycle_examples(base: dict[str, Any]) -> None:
     edited = deepcopy(base)
     approval = edited["approvals"][0]
@@ -189,6 +231,28 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     recovered["captured_at"] = recovered["audit_snapshot"]["captured_at"] = "2026-04-28T09:14:38Z"
     refresh_audit(recovered)
     write("recovered-envelope.json", recovered)
+
+    payload = json.loads((EXAMPLES / "actions" / "file.write.json").read_text(encoding="utf-8"))
+    precondition = {"resource": payload["path"], "kind": "content_digest", "expected": digest_value("exports:\n  per_minute: 20\n")}
+    guarded = deepcopy(base)
+    guarded["proposal"]["target_precondition"] = precondition
+    guarded["review_snapshots"][0]["content"]["target_precondition"] = deepcopy(precondition)
+    guarded = rebind_action(guarded, "file.write", payload)
+    guarded["dispatches"][0]["precondition_check"] = {"checked_at": guarded["dispatches"][0]["started_at"], "result": "matched", "observed_hash": precondition["expected"]}
+    refresh_audit(guarded)
+    write("precondition-envelope.json", guarded)
+
+    stale = deepcopy(guarded)
+    dispatch = stale["dispatches"][0]
+    dispatch.update(status="not_dispatched", reason="precondition_failed")
+    dispatch.pop("provider")
+    dispatch["precondition_check"].update(result="changed", observed_hash=digest_value("exports:\n  per_minute: 30\n"))
+    for event in stale["audit_events"]:
+        if event["event_type"] == "dispatch.succeeded":
+            event["event_type"] = "dispatch.not_dispatched"
+            event["detail"] = {"action_hash": dispatch["action_hash"], "reason_code": "precondition_failed"}
+    refresh_audit(stale)
+    write("precondition-failed-envelope.json", stale)
 
     granted = deepcopy(base)
     granted["request"]["policy"]["requirements"]["require_execution_grant"] = True

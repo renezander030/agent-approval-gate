@@ -672,6 +672,31 @@ def effect_errors(
     return errors
 
 
+def precondition_errors(
+    proposal: dict[str, Any], review_snapshots: list[dict[str, Any]], dispatches: list[dict[str, Any]]
+) -> list[str]:
+    """The approver sees the expected target state, and only a matched check reaches the provider."""
+    errors: list[str] = []
+    expected = proposal.get("target_precondition")
+    for snapshot in review_snapshots:
+        if snapshot["content"].get("target_precondition") != expected:
+            errors.append(f"review snapshot {snapshot['snapshot_id']} changes the target precondition")
+    for dispatch in dispatches:
+        check = dispatch.get("precondition_check")
+        if expected is None:
+            if check is not None:
+                errors.append(f"dispatch {dispatch['dispatch_id']} checks a precondition the action does not declare")
+            continue
+        if dispatch["status"] in {"succeeded", "failed", "outcome_unknown"}:
+            if not check or check["result"] != "matched":
+                errors.append(f"dispatch {dispatch['dispatch_id']} invoked without a matched target precondition")
+            elif parse_time(check["checked_at"]) > parse_time(dispatch["started_at"]):
+                errors.append(f"dispatch {dispatch['dispatch_id']} checked its precondition after invocation")
+        if dispatch.get("reason") == "precondition_failed" and (not check or check["result"] == "matched"):
+            errors.append(f"dispatch {dispatch['dispatch_id']} refused on a precondition that matched")
+    return errors
+
+
 def revocation_errors(
     request: dict[str, Any], decision: dict[str, Any] | None, events: list[dict[str, Any]]
 ) -> list[str]:
@@ -964,6 +989,7 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
     requirements = request["policy"]["requirements"]
     errors.extend(policy_outcome_errors(request, approvals, dispatches))
     errors.extend(effect_errors(proposal, review_snapshots, request, approvals))
+    errors.extend(precondition_errors(proposal, review_snapshots, dispatches))
     if request["status"] in {"approved", "consumed"} and len(approved_records) < requirements["minimum_approvals"]:
         errors.append("approval quorum is not satisfied")
     if requirements["distinct_approvers"]:

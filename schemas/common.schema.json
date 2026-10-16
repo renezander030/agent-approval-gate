@@ -239,6 +239,17 @@
         "required": ["read_only", "destructive"]
       }
     },
+    "target_precondition": {
+      "description": "The state of the target the approver saw, checked by the dispatcher immediately before invocation, as HTTP If-Match does.",
+      "type": "object",
+      "required": ["resource", "kind", "expected"],
+      "additionalProperties": false,
+      "properties": {
+        "resource": {"$ref": "#/$defs/safe_text", "maxLength": 512},
+        "kind": {"type": "string", "enum": ["version", "etag", "content_digest"]},
+        "expected": {"$ref": "#/$defs/safe_text", "maxLength": 256}
+      }
+    },
     "evidence_reference": {
       "type": "object",
       "required": ["kind", "uri", "digest"],

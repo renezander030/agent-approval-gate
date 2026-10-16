@@ -73,6 +73,7 @@
     "risk": {"type": "string", "enum": ["low", "medium", "high"]},
     "idempotency_key": {"$ref": "common.schema.json#/$defs/identifier"},
     "effects": {"$ref": "common.schema.json#/$defs/effect_hints"},
+    "target_precondition": {"$ref": "common.schema.json#/$defs/target_precondition"},
     "review_evidence": {
       "type": "array",
       "maxItems": 20,

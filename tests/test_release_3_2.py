@@ -12,8 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from generate_examples import refresh_audit  # noqa: E402
-from test_release_3_1 import rebind  # noqa: E402
+from generate_examples import rebind_action as rebind, refresh_audit  # noqa: E402
 from validate_contracts import (  # noqa: E402
     digest, effect_errors, execution_grant_manifest, load, main, policy_outcome_errors, policy_rule_errors, schema_catalog, validate_envelope, validator_for,
 )
@@ -231,6 +230,39 @@ class ExecutionGrantTests(unittest.TestCase):
             path.write_text(json.dumps(self.dispatch), encoding="utf-8")
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(main(["--record", "dispatch-record", str(path)]), 0)
+
+
+class TargetPreconditionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.envelope = load("examples/precondition-envelope.json")
+        self.dispatch_id = self.envelope["dispatches"][0]["dispatch_id"]
+
+    def refused(self, envelope: dict, reason: str) -> None:
+        refresh_audit(envelope)
+        self.assertIn(reason, validate_envelope(envelope))
+
+    def test_precondition_is_part_of_the_approved_action(self) -> None:
+        self.envelope["proposal"]["target_precondition"]["expected"] = digest("another version")
+        refresh_audit(self.envelope)
+        self.assertIn("request action_hash does not match the proposed action", validate_envelope(self.envelope))
+
+    def test_check_precedes_invocation(self) -> None:
+        self.envelope["dispatches"][0]["precondition_check"]["checked_at"] = "2026-04-28T09:14:34Z"
+        self.refused(self.envelope, f"dispatch {self.dispatch_id} checked its precondition after invocation")
+
+    def test_unavailable_check_does_not_invoke(self) -> None:
+        self.envelope["dispatches"][0]["precondition_check"]["result"] = "unavailable"
+        self.refused(self.envelope, f"dispatch {self.dispatch_id} invoked without a matched target precondition")
+
+    def test_refusal_names_a_failed_check(self) -> None:
+        envelope = load("examples/precondition-failed-envelope.json")
+        envelope["dispatches"][0]["precondition_check"]["result"] = "matched"
+        self.refused(envelope, f"dispatch {self.dispatch_id} refused on a precondition that matched")
+
+    def test_undeclared_precondition_is_not_checked(self) -> None:
+        envelope = load("examples/approval-envelope.json")
+        envelope["dispatches"][0]["precondition_check"] = {"checked_at": "2026-04-28T09:14:33Z", "result": "matched"}
+        self.refused(envelope, f"dispatch {envelope['dispatches'][0]['dispatch_id']} checks a precondition the action does not declare")
 
 
 class PromptChannelTests(unittest.TestCase):

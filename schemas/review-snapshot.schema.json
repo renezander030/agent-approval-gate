@@ -67,6 +67,7 @@
         "arguments": true,
         "risk": {"type": "string", "enum": ["low", "medium", "high"]},
         "effects": {"$ref": "common.schema.json#/$defs/effect_hints"},
+        "target_precondition": {"$ref": "common.schema.json#/$defs/target_precondition"},
         "expires_at": {"type": "string", "format": "date-time"},
         "policy_summary": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 1000},
         "evidence": {
