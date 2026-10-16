@@ -14,7 +14,8 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from generate_examples import rebind_action as rebind, refresh_audit  # noqa: E402
 from validate_contracts import (  # noqa: E402
-    collection_errors, digest, effect_errors, execution_grant_manifest, load, main, policy_outcome_errors, policy_rule_errors, schema_catalog, validate_envelope, validator_for,
+    collection_errors, digest, effect_errors, execution_grant_manifest, load, main, policy_outcome_errors,
+    policy_snapshot_errors, schema_catalog, validate_envelope, validator_for,
 )
 
 LOCAL_ACTION_TYPES = ("shell.exec", "file.write")
@@ -128,11 +129,11 @@ class RulePrecedenceTests(unittest.TestCase):
                 self.policy["matched_rules"] = [{"rule_id": f"rule.{index}", "effect": effect} for index, effect in enumerate(effects)]
                 for outcome in ("require_approval", "auto_approve", "deny"):
                     self.policy["outcome"] = outcome
-                    self.assertEqual(policy_rule_errors(self.policy) == [], outcome == expected)
+                    self.assertEqual(policy_snapshot_errors(self.policy) == [], outcome == expected)
 
     def test_rule_ids_are_unique(self) -> None:
         self.policy["matched_rules"].append(deepcopy(self.policy["matched_rules"][0]))
-        self.assertIn("policy matched_rules repeat a rule_id", policy_rule_errors(self.policy))
+        self.assertIn("policy matched_rules repeat a rule_id", policy_snapshot_errors(self.policy))
 
     def test_lifecycle_outcome_follows_its_rules(self) -> None:
         envelope = load("examples/approval-envelope.json")
@@ -179,6 +180,15 @@ class EvaluatorUnavailableTests(unittest.TestCase):
         policy["outcome"] = "auto_approve"
         policy["requirements"]["allow_auto_approval"] = True
         self.assertTrue(schema_errors("schemas/approval-policy.schema.json", policy))
+
+    def test_standalone_policy_record_is_checked(self) -> None:
+        policy = unavailable_envelope()["request"]["policy"]
+        policy["requirements"].pop("on_evaluator_unavailable")
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "policy.json"
+            path.write_text(json.dumps(policy), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["--record", "approval-policy", str(path)]), 1)
 
     def test_unavailable_evaluator_has_no_matched_rules(self) -> None:
         policy = unavailable_envelope()["request"]["policy"]

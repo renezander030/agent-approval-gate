@@ -606,18 +606,20 @@ def audit_binding_errors(envelope: dict[str, Any]) -> list[str]:
     return errors
 
 
-def policy_rule_errors(policy: dict[str, Any]) -> list[str]:
-    """The recorded outcome follows deny > require_approval > auto_approve over the matched rules."""
-    if "matched_rules" not in policy:
-        return []
+def policy_snapshot_errors(policy: dict[str, Any]) -> list[str]:
+    """The recorded outcome follows the matched rules, and an unavailable evaluator never permits."""
     errors: list[str] = []
-    rule_ids = [rule["rule_id"] for rule in policy["matched_rules"]]
-    if len(rule_ids) != len(set(rule_ids)):
-        errors.append("policy matched_rules repeat a rule_id")
-    effects = {rule["effect"] for rule in policy["matched_rules"]}
-    expected = next((effect for effect in ("deny", "require_approval", "auto_approve") if effect in effects), "deny")
-    if policy.get("outcome") != expected:
-        errors.append(f"policy outcome does not follow its matched rules (expected {expected})")
+    if "matched_rules" in policy:
+        rule_ids = [rule["rule_id"] for rule in policy["matched_rules"]]
+        if len(rule_ids) != len(set(rule_ids)):
+            errors.append("policy matched_rules repeat a rule_id")
+        effects = {rule["effect"] for rule in policy["matched_rules"]}
+        expected = next((effect for effect in ("deny", "require_approval", "auto_approve") if effect in effects), "deny")
+        if policy.get("outcome") != expected:
+            errors.append(f"policy outcome does not follow its matched rules (expected {expected})")
+    fallback = policy["requirements"].get("on_evaluator_unavailable", "deny")
+    if policy.get("evaluation_status") == "evaluator_unavailable" and policy.get("outcome") != "deny" and fallback != "require_human_approval":
+        errors.append("unavailable evaluator must deny unless policy escalates to a human")
     return errors
 
 
@@ -625,11 +627,8 @@ def policy_outcome_errors(
     request: dict[str, Any], approvals: list[dict[str, Any]], dispatches: list[dict[str, Any]]
 ) -> list[str]:
     """Only an explicit, closed policy outcome may select an approval path."""
-    errors = policy_rule_errors(request["policy"])
+    errors = policy_snapshot_errors(request["policy"])
     outcome = request["policy"].get("outcome")
-    fallback = request["policy"]["requirements"].get("on_evaluator_unavailable", "deny")
-    if request["policy"].get("evaluation_status") == "evaluator_unavailable" and outcome != "deny" and fallback != "require_human_approval":
-        errors.append("unavailable evaluator must deny unless policy escalates to a human")
     auto_approvals = [item for item in approvals if item["decision"] == "auto_approved"]
     if auto_approvals and outcome != "auto_approve":
         errors.append("auto approval requires an explicit auto_approve policy outcome")
@@ -1561,9 +1560,9 @@ def record_errors(kind: str, record: Any) -> list[str]:
     if not errors and kind == "dispatch-record":
         errors.extend(execution_grant_errors(record))
     if not errors and kind == "approval-policy":
-        errors.extend(policy_rule_errors(record))
+        errors.extend(policy_snapshot_errors(record))
     if not errors and kind == "approval-request":
-        errors.extend(policy_rule_errors(record["policy"]))
+        errors.extend(policy_snapshot_errors(record["policy"]))
     return errors
 
 
