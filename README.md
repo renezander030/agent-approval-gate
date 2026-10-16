@@ -69,7 +69,7 @@ from the agent's point of view.
 | [`audit-event.schema.json`](schemas/audit-event.schema.json) | Redacted lifecycle evidence with actor, event time, ingestion time, and hash chain |
 | [`audit-snapshot.schema.json`](schemas/audit-snapshot.schema.json) | Completeness manifest for one exported audit-event set |
 | [`approval-envelope.schema.json`](schemas/approval-envelope.schema.json) | Portable bundle plus cross-contract profile for a completed lifecycle |
-| [`actions/*.schema.json`](schemas/actions/) | Strict payload references for `email.send`, `crm.update_record`, `ticket.create`, `db.update_row`, `api.call`, and `n8n.trigger_workflow`, each naming the fields the approver must see as the target |
+| [`actions/*.schema.json`](schemas/actions/) | Strict payload references for `email.send`, `crm.update_record`, `ticket.create`, `db.update_row`, `api.call`, `n8n.trigger_workflow`, `shell.exec`, and `file.write`, each naming the fields the approver must see as the target |
 
 Schema IDs are pinned to the `v3.2.0` release. Pin a released ID in production; do not
 resolve schemas from the mutable default branch.
@@ -113,6 +113,16 @@ Version 3.1 adds a fail-closed policy outcome (`require_approval`, `auto_approve
 of an approved request until the moment it is consumed, structured `agent_feedback` on
 refusals so the agent can revise instead of re-asking, an `mcp_elicitation` channel
 ([profile](docs/mcp-elicitation.md)), and review-target binding for every action type.
+
+Version 3.2 adds policy rules with a fixed deny > require_approval > auto_approve
+precedence, an opt-in human escalation when the evaluator cannot answer, effect hints
+that can require a human, [standing grants](examples/standing-grant-envelope.json)
+with an expiry and a use ceiling, [target preconditions](examples/precondition-envelope.json)
+checked before dispatch, [execution grants](examples/granted-envelope.json) a provider
+can verify, `shell.exec` and `file.write` action schemas, and `teams` and `cli`
+channels. [`docs/framework-mapping.md`](docs/framework-mapping.md) maps LangGraph,
+the OpenAI Agents SDK, the Vercel AI SDK, Google ADK, pydantic-ai, Mastra, MCP, and
+coding-agent hooks onto the records.
 
 [`tests/canonicalization.json`](tests/canonicalization.json) is a language-neutral
 RFC 8785 corpus with exact canonical UTF-8 bytes and SHA-256 results. Use it to prove
@@ -199,7 +209,8 @@ Those are trust-boundary components, not Code-node snippets. See
 - Not third-party-verifiable proof when the platform itself holds the signing key.
 - Not a WebAuthn UI, credential-registration service, or trust-anchor store.
 
-See [`docs/architecture.md`](docs/architecture.md) for the threat model and
+See [`docs/architecture.md`](docs/architecture.md) for the threat model,
+[`docs/framework-mapping.md`](docs/framework-mapping.md) for framework integration, and
 [`docs/contracts.md`](docs/contracts.md) for canonicalization, lifecycle, and
 compatibility rules.
 
