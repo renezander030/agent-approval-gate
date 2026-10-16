@@ -143,6 +143,20 @@
           "value": "allow"
         }
       ]
+    },
+    {
+      "name": "unavailable evaluator escalated without the policy opt-in",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/approval-envelope.json",
+      "expect": "semantic",
+      "expect_error": "unavailable evaluator must deny unless policy escalates to a human",
+      "operations": [
+        {
+          "op": "add",
+          "path": "/request/policy/evaluation_status",
+          "value": "evaluator_unavailable"
+        }
+      ]
     }
   ]
 }

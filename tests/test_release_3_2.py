@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from generate_examples import refresh_audit  # noqa: E402
 from test_release_3_1 import rebind  # noqa: E402
 from validate_contracts import (  # noqa: E402
-    digest, effect_errors, load, main, policy_rule_errors, schema_catalog, validate_envelope, validator_for,
+    digest, effect_errors, load, main, policy_outcome_errors, policy_rule_errors, schema_catalog, validate_envelope, validator_for,
 )
 
 LOCAL_ACTION_TYPES = ("shell.exec", "file.write")
@@ -149,6 +149,42 @@ class RulePrecedenceTests(unittest.TestCase):
             path.write_text(json.dumps(self.policy), encoding="utf-8")
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(main(["--record", "approval-policy", str(path)]), 1)
+
+
+def unavailable_envelope() -> dict:
+    envelope = load("examples/approval-envelope.json")
+    policy = envelope["request"]["policy"]
+    policy.update(evaluation_status="evaluator_unavailable", outcome_reason="Evaluator timed out after 5 s")
+    policy["requirements"]["on_evaluator_unavailable"] = "require_human_approval"
+    refresh_audit(envelope)
+    return envelope
+
+
+class EvaluatorUnavailableTests(unittest.TestCase):
+    def test_unavailable_evaluator_can_escalate_to_a_human(self) -> None:
+        self.assertEqual(validate_envelope(unavailable_envelope()), [])
+
+    def test_escalation_needs_the_policy_opt_in(self) -> None:
+        for fallback in (None, "deny"):
+            with self.subTest(fallback=fallback):
+                envelope = unavailable_envelope()
+                requirements = envelope["request"]["policy"]["requirements"]
+                requirements.pop("on_evaluator_unavailable")
+                if fallback:
+                    requirements["on_evaluator_unavailable"] = fallback
+                self.assertIn("unavailable evaluator must deny unless policy escalates to a human",
+                              policy_outcome_errors(envelope["request"], envelope["approvals"], envelope["dispatches"]))
+
+    def test_unavailable_evaluator_never_auto_approves(self) -> None:
+        policy = unavailable_envelope()["request"]["policy"]
+        policy["outcome"] = "auto_approve"
+        policy["requirements"]["allow_auto_approval"] = True
+        self.assertTrue(schema_errors("schemas/approval-policy.schema.json", policy))
+
+    def test_unavailable_evaluator_has_no_matched_rules(self) -> None:
+        policy = unavailable_envelope()["request"]["policy"]
+        policy["matched_rules"] = [{"rule_id": "rule.cached", "effect": "require_approval"}]
+        self.assertTrue(schema_errors("schemas/approval-policy.schema.json", policy))
 
 
 class PromptChannelTests(unittest.TestCase):

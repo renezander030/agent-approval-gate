@@ -605,6 +605,9 @@ def policy_outcome_errors(
     """Only an explicit, closed policy outcome may select an approval path."""
     errors = policy_rule_errors(request["policy"])
     outcome = request["policy"].get("outcome")
+    fallback = request["policy"]["requirements"].get("on_evaluator_unavailable", "deny")
+    if request["policy"].get("evaluation_status") == "evaluator_unavailable" and outcome != "deny" and fallback != "require_human_approval":
+        errors.append("unavailable evaluator must deny unless policy escalates to a human")
     auto_approvals = [item for item in approvals if item["decision"] == "auto_approved"]
     if auto_approvals and outcome != "auto_approve":
         errors.append("auto approval requires an explicit auto_approve policy outcome")

@@ -28,6 +28,11 @@
       "type": "string",
       "enum": ["require_approval", "auto_approve", "deny"]
     },
+    "evaluation_status": {
+      "description": "decided when the evaluator returned a verdict; evaluator_unavailable when it errored, timed out, or returned no verdict.",
+      "type": "string",
+      "enum": ["decided", "evaluator_unavailable"]
+    },
     "matched_rules": {
       "description": "Every policy rule that matched this action, with its effect. The outcome is deny when any rule denies, otherwise require_approval when any rule asks, otherwise auto_approve; no matched rule is deny.",
       "type": "array",
@@ -76,6 +81,11 @@
           }
         },
         "allow_auto_approval": {"type": "boolean"},
+        "on_evaluator_unavailable": {
+          "description": "What an unavailable evaluator leads to: deny (the default), or require_human_approval to ask a human instead. It never leads to auto approval.",
+          "type": "string",
+          "enum": ["deny", "require_human_approval"]
+        },
         "human_required_effects": {
           "description": "Effects that require every approving decision to come from a human. destructive and open_world fire on a true hint; not_idempotent and not_read_only fire on a false hint. An undeclared hint takes its conservative value.",
           "type": "array",
@@ -130,6 +140,13 @@
         "properties": {
           "requirements": {"properties": {"allow_auto_approval": {"const": true}}}
         }
+      }
+    },
+    {
+      "if": {"properties": {"evaluation_status": {"const": "evaluator_unavailable"}}, "required": ["evaluation_status"]},
+      "then": {
+        "properties": {"outcome": {"enum": ["deny", "require_approval"]}},
+        "not": {"required": ["matched_rules"]}
       }
     }
   ]
