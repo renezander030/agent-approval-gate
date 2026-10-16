@@ -41,7 +41,7 @@
     "recorded_at": {"type": "string", "format": "date-time"},
     "channel": {
       "type": "string",
-      "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "policy"]
+      "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli", "policy"]
     },
     "comment": {"type": "string", "maxLength": 2000},
     "modifications": {
@@ -174,7 +174,7 @@
             "required": ["authentication"]
           },
           "channel": {
-            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation"]
+            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli"]
           }
         }
       }
@@ -218,7 +218,7 @@
     {
       "if": {
         "properties": {
-          "channel": {"const": "mcp_elicitation"},
+          "channel": {"enum": ["mcp_elicitation", "teams", "cli"]},
           "decision": {"enum": ["approved", "rejected"]}
         },
         "required": ["channel", "decision"]

@@ -655,6 +655,10 @@ def audit_snapshot_errors(events: list[dict[str, Any]], snapshot: dict[str, Any]
     return errors
 
 
+# Interactive channels where the approver answers a prompt the gate delivered.
+PROMPT_CHANNELS = {"mcp_elicitation": "an elicitation", "teams": "a Teams card", "cli": "a terminal prompt"}
+
+
 def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | None = None) -> list[str]:
     errors: list[str] = []
     proposal = envelope["proposal"]
@@ -916,8 +920,8 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
         item["channel"] for item in request["channels"] if item["delivery_status"] == "delivered"
     }
     for approval in approvals:
-        if approval["channel"] == "mcp_elicitation" and "mcp_elicitation" not in delivered_channels:
-            errors.append(f"approval {approval['approval_id']} answers an elicitation that was never delivered")
+        if approval["channel"] in PROMPT_CHANNELS and approval["channel"] not in delivered_channels:
+            errors.append(f"approval {approval['approval_id']} answers {PROMPT_CHANNELS[approval['channel']]} that was never delivered")
     for approval in approved_records:
         approver_id = approval["decided_by"]["identifier"]
         if approval["channel"] not in allowed_channels:
