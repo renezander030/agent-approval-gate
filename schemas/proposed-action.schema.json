@@ -72,6 +72,7 @@
     "tenant": {"type": "string", "minLength": 1, "maxLength": 64},
     "risk": {"type": "string", "enum": ["low", "medium", "high"]},
     "idempotency_key": {"$ref": "common.schema.json#/$defs/identifier"},
+    "effects": {"$ref": "common.schema.json#/$defs/effect_hints"},
     "review_evidence": {
       "type": "array",
       "maxItems": 20,

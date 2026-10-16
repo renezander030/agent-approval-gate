@@ -223,6 +223,22 @@
         }
       ]
     },
+    "effect_hints": {
+      "description": "What the action does to the world, as MCP tool annotations describe it. A hint that is not declared takes the conservative value: not read-only, destructive, not idempotent, open-world.",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "read_only": {"type": "boolean"},
+        "destructive": {"type": "boolean"},
+        "idempotent": {"type": "boolean"},
+        "open_world": {"type": "boolean"}
+      },
+      "not": {
+        "properties": {"read_only": {"const": true}, "destructive": {"const": true}},
+        "required": ["read_only", "destructive"]
+      }
+    },
     "evidence_reference": {
       "type": "object",
       "required": ["kind", "uri", "digest"],

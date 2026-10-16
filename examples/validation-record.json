@@ -2,7 +2,7 @@
   "schema_version": "3.2.0",
   "validation_id": "validation_2026-04-28_841ac000",
   "proposal_id": "prop_2026-04-28_b3f1a2c4",
-  "action_hash": "sha256:6a8d174edc86338a3bd12c8ad6ebc301ba1135c36deb187317dde605a749bc80",
+  "action_hash": "sha256:2991d5f888b4369ae368a0e1effa0d4c9e74fe4ddf8c607ab96849aba0b28691",
   "validator": {
     "kind": "system",
     "identifier": "approval-validator",

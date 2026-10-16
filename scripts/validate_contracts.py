@@ -603,6 +603,35 @@ def policy_outcome_errors(
     return errors
 
 
+# An undeclared hint takes the conservative value, as MCP tool annotations default.
+EFFECT_DEFAULTS = {"read_only": False, "destructive": True, "idempotent": False, "open_world": True}
+EFFECT_TRIGGERS = {
+    "destructive": ("destructive", True), "open_world": ("open_world", True),
+    "not_idempotent": ("idempotent", False), "not_read_only": ("read_only", False),
+}
+
+
+def effect_errors(
+    proposal: dict[str, Any], review_snapshots: list[dict[str, Any]],
+    request: dict[str, Any], approvals: list[dict[str, Any]],
+) -> list[str]:
+    """Effect hints are shown to the approver as proposed, and chosen effects need a human."""
+    errors: list[str] = []
+    declared = proposal.get("effects")
+    for snapshot in review_snapshots:
+        if snapshot["content"].get("effects") != declared:
+            errors.append(f"review snapshot {snapshot['snapshot_id']} changes the effect hints")
+    hints = {**EFFECT_DEFAULTS, **(declared or {})}
+    required = request["policy"]["requirements"].get("human_required_effects", [])
+    fired = [name for name in required if hints[EFFECT_TRIGGERS[name][0]] == EFFECT_TRIGGERS[name][1]]
+    if fired:
+        if request["policy"].get("outcome") == "auto_approve":
+            errors.append("effects " + ", ".join(fired) + " cannot be auto approved")
+        if any(item["decision"] in {"approved", "auto_approved"} and item["decided_by"]["kind"] != "human" for item in approvals):
+            errors.append("effects " + ", ".join(fired) + " require a human approval")
+    return errors
+
+
 def revocation_errors(
     request: dict[str, Any], decision: dict[str, Any] | None, events: list[dict[str, Any]]
 ) -> list[str]:
@@ -894,6 +923,7 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
 
     requirements = request["policy"]["requirements"]
     errors.extend(policy_outcome_errors(request, approvals, dispatches))
+    errors.extend(effect_errors(proposal, review_snapshots, request, approvals))
     if request["status"] in {"approved", "consumed"} and len(approved_records) < requirements["minimum_approvals"]:
         errors.append("approval quorum is not satisfied")
     if requirements["distinct_approvers"]:

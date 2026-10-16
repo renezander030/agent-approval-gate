@@ -10,7 +10,9 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from generate_examples import refresh_audit  # noqa: E402
 from test_release_3_1 import rebind  # noqa: E402
-from validate_contracts import digest, load, schema_catalog, validate_envelope, validator_for  # noqa: E402
+from validate_contracts import (  # noqa: E402
+    digest, effect_errors, load, schema_catalog, validate_envelope, validator_for,
+)
 
 LOCAL_ACTION_TYPES = ("shell.exec", "file.write")
 
@@ -71,6 +73,41 @@ class LocalActionCatalogTests(unittest.TestCase):
         authority["authority_digest"] = digest(authority["subjects"])
         refresh_audit(envelope)
         self.assertIn(f"authority snapshot {authority['authority_snapshot_id']} does not authorize the action type", validate_envelope(envelope))
+
+
+class EffectHintTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.envelope = load("examples/approval-envelope.json")
+
+    def test_reviewed_effects_match_the_proposal(self) -> None:
+        review = self.envelope["review_snapshots"][0]
+        review["content"]["effects"]["open_world"] = False
+        review["content_hash"] = digest(review["content"])
+        refresh_audit(self.envelope)
+        self.assertIn(f"review snapshot {review['snapshot_id']} changes the effect hints", validate_envelope(self.envelope))
+
+    def test_read_only_and_destructive_contradict(self) -> None:
+        proposal = self.envelope["proposal"]
+        proposal["effects"].update(read_only=True, destructive=True)
+        self.assertTrue(schema_errors("schemas/proposed-action.schema.json", proposal))
+
+    def test_undeclared_hints_are_conservative(self) -> None:
+        request = deepcopy(self.envelope["request"])
+        request["policy"]["outcome"] = "auto_approve"
+        request["policy"]["requirements"]["human_required_effects"] = ["destructive"]
+        proposal = {"effects": {"open_world": False}}
+        self.assertIn("effects destructive cannot be auto approved", effect_errors(proposal, [], request, []))
+        proposal["effects"]["destructive"] = False
+        self.assertEqual(effect_errors(proposal, [], request, []), [])
+
+    def test_fired_effects_need_a_human(self) -> None:
+        request = deepcopy(self.envelope["request"])
+        approval = {"decision": "auto_approved", "decided_by": {"kind": "policy"}}
+        for required, fires in ((["open_world"], True), (["not_idempotent"], False), (["not_read_only"], True), (["destructive"], False)):
+            with self.subTest(required=required):
+                request["policy"]["requirements"]["human_required_effects"] = required
+                errors = effect_errors(self.envelope["proposal"], [], request, [approval])
+                self.assertEqual(any("require a human approval" in error for error in errors), fires)
 
 
 class PromptChannelTests(unittest.TestCase):

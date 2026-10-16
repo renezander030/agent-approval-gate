@@ -4,7 +4,7 @@
   "proposal_id": "prop_2026-04-28_b3f1a2c4",
   "call_id": "call_2026-04-28_7e19c5ad",
   "tenant": "acme-corp",
-  "action_hash": "sha256:6a8d174edc86338a3bd12c8ad6ebc301ba1135c36deb187317dde605a749bc80",
+  "action_hash": "sha256:2991d5f888b4369ae368a0e1effa0d4c9e74fe4ddf8c607ab96849aba0b28691",
   "validation_id": "validation_2026-04-28_841ac000",
   "review_snapshot_id": "review_2026-04-28_47b2c000",
   "callback_nonce_hash": "sha256:91eaf28be1fa8121d74d9ce65298da05363c70dfb691c4c4e1a17691bb09966a",
@@ -28,7 +28,7 @@
     "revision": "2026-04-15.3",
     "policy_digest": "sha256:a4f5ac837738a43e70baa0f2d602bbba2f2285a518beb568746f310f0678dc35",
     "evaluation_id": "eval_2026-04-28_1c4f8a00",
-    "material_input_hash": "sha256:6a8d174edc86338a3bd12c8ad6ebc301ba1135c36deb187317dde605a749bc80",
+    "material_input_hash": "sha256:2991d5f888b4369ae368a0e1effa0d4c9e74fe4ddf8c607ab96849aba0b28691",
     "evaluated_at": "2026-04-28T09:14:24Z",
     "outcome": "require_approval",
     "requirements": {
@@ -43,6 +43,10 @@
         "email"
       ],
       "allow_auto_approval": false,
+      "human_required_effects": [
+        "destructive",
+        "open_world"
+      ],
       "required_roles": [
         "customer-support"
       ],

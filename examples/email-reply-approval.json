@@ -44,5 +44,11 @@
   "expires_at": "2026-04-28T17:14:23Z",
   "tenant": "acme-corp",
   "risk": "high",
+  "effects": {
+    "read_only": false,
+    "destructive": false,
+    "idempotent": true,
+    "open_world": true
+  },
   "idempotency_key": "idem_email_ZD-48211_reply_01"
 }
