@@ -57,6 +57,42 @@
       "maxItems": 8,
       "items": {"$ref": "common.schema.json#/$defs/signature"}
     },
+    "standing_grant": {
+      "description": "A human's earlier decision to let policy approve a bounded class of actions. An auto approval that cites it names the use it consumes.",
+      "type": "object",
+      "required": ["grant_id", "granted_by", "granted_at", "expires_at", "scope", "max_uses", "use_number"],
+      "additionalProperties": false,
+      "properties": {
+        "grant_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "granted_by": {
+          "allOf": [{"$ref": "common.schema.json#/$defs/actor"}],
+          "properties": {
+            "kind": {"const": "human"},
+            "authentication": {"properties": {"human_present": {"const": true}}}
+          }
+        },
+        "granted_at": {"type": "string", "format": "date-time"},
+        "expires_at": {"type": "string", "format": "date-time"},
+        "scope": {
+          "type": "object",
+          "required": ["tenant", "action_types", "max_risk"],
+          "additionalProperties": false,
+          "properties": {
+            "tenant": {"type": "string", "minLength": 1, "maxLength": 64},
+            "action_types": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 16,
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{2,127}$"}
+            },
+            "max_risk": {"type": "string", "enum": ["low", "medium", "high"]}
+          }
+        },
+        "max_uses": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "use_number": {"type": "integer", "minimum": 1, "maximum": 10000}
+      }
+    },
     "rejection_settlement": {
       "type": "object",
       "required": ["state"],
@@ -108,6 +144,10 @@
     }
   },
   "allOf": [
+    {
+      "if": {"required": ["standing_grant"]},
+      "then": {"properties": {"decision": {"const": "auto_approved"}}}
+    },
     {
       "if": {
         "properties": {

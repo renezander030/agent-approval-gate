@@ -37,6 +37,17 @@
       "schema": "schemas/approval-envelope.schema.json",
       "instance": "examples/precondition-failed-envelope.json",
       "semantic": true
+    },
+    {
+      "name": "auto approval under a human's standing grant",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/standing-grant-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "standalone auto approval citing a standing grant",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/standing-grant-approval-record.json"
     }
   ],
   "negative": [
@@ -267,6 +278,90 @@
         {
           "op": "remove",
           "path": "/review_snapshots/0/content/target_precondition"
+        }
+      ]
+    },
+    {
+      "name": "standing grant used after it expired",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/standing-grant-envelope.json",
+      "expect": "semantic",
+      "expect_error": "standing grant was not in force when it was used",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/approvals/0/standing_grant/expires_at",
+          "value": "2026-04-28T09:00:00Z"
+        }
+      ]
+    },
+    {
+      "name": "standing grant stretched to another action type",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/standing-grant-envelope.json",
+      "expect": "semantic",
+      "expect_error": "standing grant does not cover email.send",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/approvals/0/standing_grant/scope/action_types",
+          "value": [
+            "ticket.create"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "standing grant issued by a policy instead of a human",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/standing-grant-approval-record.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/standing_grant/granted_by/kind",
+          "value": "policy"
+        }
+      ]
+    },
+    {
+      "name": "standing grant cited by a human decision",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/email-reply-approval-record.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "add",
+          "path": "/standing_grant",
+          "value": {
+            "grant_id": "grant_2026-04-27_support-replies",
+            "granted_by": {
+              "kind": "human",
+              "identifier": "rene@acme-corp.example",
+              "display_name": "Rene Z.",
+              "roles": [
+                "customer-support"
+              ],
+              "authentication": {
+                "method": "signed_callback",
+                "human_present": true,
+                "assurance": "substantial",
+                "authenticated_at": "2026-04-28T09:14:30Z",
+                "evidence_ref": "mail-callback:mail_2026-04-28_3391"
+              }
+            },
+            "granted_at": "2026-04-27T16:02:00Z",
+            "expires_at": "2026-05-04T16:02:00Z",
+            "scope": {
+              "tenant": "acme-corp",
+              "action_types": [
+                "email.send"
+              ],
+              "max_risk": "medium"
+            },
+            "max_uses": 200,
+            "use_number": 14
+          }
         }
       ]
     }

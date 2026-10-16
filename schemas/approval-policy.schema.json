@@ -86,6 +86,10 @@
           "type": "string",
           "enum": ["deny", "require_human_approval"]
         },
+        "require_standing_grant": {
+          "description": "Every auto approval must cite a human's standing grant that covers the action.",
+          "type": "boolean"
+        },
         "require_execution_grant": {
           "description": "Every provider invocation must carry an execution grant bound to its dispatch.",
           "type": "boolean"

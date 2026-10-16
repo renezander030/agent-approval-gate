@@ -697,6 +697,46 @@ def precondition_errors(
     return errors
 
 
+RISK_ORDER = {"low": 0, "medium": 1, "high": 2}
+
+
+def standing_grant_errors(
+    proposal: dict[str, Any], request: dict[str, Any], approvals: list[dict[str, Any]]
+) -> list[str]:
+    """An auto approval under a standing grant stays inside what the granting human allowed."""
+    errors: list[str] = []
+    requirements = request["policy"]["requirements"]
+    separation = requirements["separation_of_duties"]
+    delegated_agents = {hop["agent"]["identity"] for hop in proposal["delegation_chain"]}
+    for approval in approvals:
+        grant = approval.get("standing_grant")
+        label = f"approval {approval['approval_id']}"
+        if grant is None:
+            if approval["decision"] == "auto_approved" and requirements.get("require_standing_grant"):
+                errors.append(f"{label} auto approval lacks a required standing grant")
+            continue
+        decided_at = parse_time(approval["decided_at"])
+        if not parse_time(grant["granted_at"]) <= decided_at < parse_time(grant["expires_at"]):
+            errors.append(f"{label} standing grant was not in force when it was used")
+        scope = grant["scope"]
+        if scope["tenant"] != proposal["tenant"]:
+            errors.append(f"{label} standing grant covers another tenant")
+        if proposal["action_type"] not in scope["action_types"]:
+            errors.append(f"{label} standing grant does not cover {proposal['action_type']}")
+        if RISK_ORDER[proposal["risk"]] > RISK_ORDER[scope["max_risk"]]:
+            errors.append(f"{label} standing grant does not cover {proposal['risk']} risk")
+        if grant["use_number"] > grant["max_uses"]:
+            errors.append(f"{label} standing grant is used beyond its max_uses")
+        grantor = grant["granted_by"]["identifier"]
+        if separation["agent_must_not_approve"] and grantor in delegated_agents:
+            errors.append(f"{label} standing grant was issued by the delegated agent")
+        if separation["requester_must_not_approve"] and grantor == request["requested_by"]["identifier"]:
+            errors.append(f"{label} standing grant was issued by the requester")
+        if grantor in set(separation.get("excluded_actor_ids", [])):
+            errors.append(f"{label} standing grant was issued by an excluded actor")
+    return errors
+
+
 def revocation_errors(
     request: dict[str, Any], decision: dict[str, Any] | None, events: list[dict[str, Any]]
 ) -> list[str]:
@@ -990,6 +1030,7 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
     errors.extend(policy_outcome_errors(request, approvals, dispatches))
     errors.extend(effect_errors(proposal, review_snapshots, request, approvals))
     errors.extend(precondition_errors(proposal, review_snapshots, dispatches))
+    errors.extend(standing_grant_errors(proposal, request, approvals))
     if request["status"] in {"approved", "consumed"} and len(approved_records) < requirements["minimum_approvals"]:
         errors.append("approval quorum is not satisfied")
     if requirements["distinct_approvers"]:
@@ -1581,8 +1622,9 @@ def collection_errors(envelopes: list[dict[str, Any]]) -> list[str]:
     """Identities that must stay unique across every lifecycle a deployment admitted."""
     errors: list[str] = []
     seen: dict[str, dict[Any, int]] = {
-        "proposal_id": {}, "request_id": {}, "call": {}, "dispatch_id": {}, "audit_stream": {},
+        "proposal_id": {}, "request_id": {}, "call": {}, "dispatch_id": {}, "audit_stream": {}, "grant_use": {},
     }
+    grants: dict[str, tuple[int, str]] = {}
     idempotency: dict[tuple[str, str], tuple[int, str]] = {}
 
     def claim(kind: str, key: Any, index: int, message: str) -> None:
@@ -1598,6 +1640,14 @@ def collection_errors(envelopes: list[dict[str, Any]]) -> list[str]:
         claim("audit_stream", envelope["audit_snapshot"]["stream_id"], index, "share one audit stream")
         for dispatch in envelope["dispatches"]:
             claim("dispatch_id", dispatch["dispatch_id"], index, "reuse dispatch_id")
+        for approval in envelope["approvals"]:
+            grant = approval.get("standing_grant")
+            if grant is None:
+                continue
+            terms = digest({key: value for key, value in grant.items() if key != "use_number"})
+            if grants.setdefault(grant["grant_id"], (index, terms))[1] != terms:
+                errors.append(f"envelopes {grants[grant['grant_id']][0]} and {index}: standing grant {grant['grant_id']} changes its terms")
+            claim("grant_use", (grant["grant_id"], grant["use_number"]), index, f"use standing grant {grant['grant_id']} number {grant['use_number']} twice")
         key = (proposal["tenant"], proposal["idempotency_key"])
         action_hash = digest(proposal)
         if key in idempotency and idempotency[key][1] != action_hash:

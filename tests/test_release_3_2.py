@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from generate_examples import rebind_action as rebind, refresh_audit  # noqa: E402
 from validate_contracts import (  # noqa: E402
-    digest, effect_errors, execution_grant_manifest, load, main, policy_outcome_errors, policy_rule_errors, schema_catalog, validate_envelope, validator_for,
+    collection_errors, digest, effect_errors, execution_grant_manifest, load, main, policy_outcome_errors, policy_rule_errors, schema_catalog, validate_envelope, validator_for,
 )
 
 LOCAL_ACTION_TYPES = ("shell.exec", "file.write")
@@ -263,6 +263,68 @@ class TargetPreconditionTests(unittest.TestCase):
         envelope = load("examples/approval-envelope.json")
         envelope["dispatches"][0]["precondition_check"] = {"checked_at": "2026-04-28T09:14:33Z", "result": "matched"}
         self.refused(envelope, f"dispatch {envelope['dispatches'][0]['dispatch_id']} checks a precondition the action does not declare")
+
+
+def renamed(envelope: dict, suffix: str) -> dict:
+    envelope = deepcopy(envelope)
+    for record, field in ((envelope["proposal"], "proposal_id"), (envelope["proposal"], "call_id"),
+                          (envelope["proposal"], "idempotency_key"), (envelope["request"], "request_id"),
+                          (envelope["audit_snapshot"], "stream_id")):
+        record[field] += suffix
+    for dispatch in envelope["dispatches"]:
+        dispatch["dispatch_id"] += suffix
+    return envelope
+
+
+class StandingGrantTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.envelope = load("examples/standing-grant-envelope.json")
+        self.label = f"approval {self.envelope['approvals'][0]['approval_id']}"
+
+    def refused(self, envelope: dict, reason: str) -> None:
+        envelope["resolutions"][0]["approval_record_hash"] = digest(envelope["approvals"][0])
+        refresh_audit(envelope)
+        self.assertIn(reason, validate_envelope(envelope))
+
+    def test_policy_can_require_a_grant(self) -> None:
+        self.envelope["approvals"][0].pop("standing_grant")
+        self.refused(self.envelope, f"{self.label} auto approval lacks a required standing grant")
+
+    def test_grant_scope_bounds_tenant_risk_and_uses(self) -> None:
+        for change, reason in (
+            (lambda g: g["scope"].update(tenant="other-tenant"), "standing grant covers another tenant"),
+            (lambda g: g["scope"].update(max_risk="low"), "standing grant does not cover medium risk"),
+            (lambda g: g.update(use_number=201), "standing grant is used beyond its max_uses"),
+            (lambda g: g.update(granted_at="2026-04-28T09:14:28Z"), "standing grant was not in force when it was used"),
+        ):
+            with self.subTest(reason=reason):
+                envelope = deepcopy(self.envelope)
+                change(envelope["approvals"][0]["standing_grant"])
+                self.refused(envelope, f"{self.label} {reason}")
+
+    def test_agent_and_requester_cannot_grant(self) -> None:
+        for grantor, reason in (("agent.support-triage.prod", "issued by the delegated agent"), ("approval-router", "issued by the requester")):
+            with self.subTest(grantor=grantor):
+                envelope = deepcopy(self.envelope)
+                envelope["approvals"][0]["standing_grant"]["granted_by"]["identifier"] = grantor
+                self.refused(envelope, f"{self.label} standing grant was {reason}")
+
+    def test_grant_cannot_override_a_human_required_effect(self) -> None:
+        self.envelope["request"]["policy"]["requirements"]["human_required_effects"] = ["open_world"]
+        self.refused(self.envelope, "effects open_world cannot be auto approved")
+
+    def test_set_counts_each_use_once(self) -> None:
+        second = renamed(self.envelope, "_b")
+        self.assertEqual(collection_errors([self.envelope, second]),
+                         ["envelopes 0 and 1: use standing grant grant_2026-04-27_support-replies number 14 twice"])
+        second["approvals"][0]["standing_grant"]["use_number"] = 15
+        self.assertEqual(collection_errors([self.envelope, second]), [])
+
+    def test_set_keeps_grant_terms_fixed(self) -> None:
+        second = renamed(self.envelope, "_b")
+        second["approvals"][0]["standing_grant"].update(use_number=15, max_uses=500)
+        self.assertEqual(collection_errors([self.envelope, second]),
+                         ["envelopes 0 and 1: standing grant grant_2026-04-27_support-replies changes its terms"])
 
 
 class PromptChannelTests(unittest.TestCase):

@@ -254,6 +254,47 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     refresh_audit(stale)
     write("precondition-failed-envelope.json", stale)
 
+    standing = deepcopy(base)
+    standing["proposal"]["risk"] = "medium"
+    standing["review_snapshots"][0]["content"]["risk"] = "medium"
+    policy = standing["request"]["policy"]
+    policy.update(outcome="auto_approve", matched_rules=[{"rule_id": "rule.support.granted-reply", "effect": "auto_approve"}])
+    requirements = policy["requirements"]
+    requirements.update(human_only=False, allow_auto_approval=True, allowed_channels=["email", "web", "policy"],
+                        require_standing_grant=True, human_required_effects=["destructive"])
+    requirements.pop("required_roles")
+    requirements["separation_of_duties"].pop("eligible_approver_ids")
+    granter = deepcopy(standing["approvals"][0]["decided_by"])
+    approval = standing["approvals"][0]
+    approval.pop("signatures", None)
+    approval.pop("comment", None)
+    approval.update(
+        decision="auto_approved", channel="policy", decided_at="2026-04-28T09:14:27Z", recorded_at="2026-04-28T09:14:27Z",
+        decided_by={"kind": "policy", "identifier": policy["policy_id"], "authentication": {"method": "policy_engine", "human_present": False, "assurance": "high", "authenticated_at": "2026-04-28T09:14:27Z"}},
+        standing_grant={
+            "grant_id": "grant_2026-04-27_support-replies", "granted_by": granter,
+            "granted_at": "2026-04-27T16:02:00Z", "expires_at": "2026-05-04T16:02:00Z",
+            "scope": {"tenant": standing["proposal"]["tenant"], "action_types": ["email.send"], "max_risk": "medium"},
+            "max_uses": 200, "use_number": 14,
+        },
+    )
+    authority = standing["authority_snapshots"][0]
+    for subject in authority["subjects"]:
+        if subject["kind"] == "approver":
+            subject["identifier"] = policy["policy_id"]
+    authority["authority_digest"] = digest_value(authority["subjects"])
+    for event in standing["audit_events"]:
+        if event["event_type"] == "approval.decided":
+            event.update(actor=deepcopy(approval["decided_by"]), occurred_at=approval["decided_at"], recorded_at=approval["recorded_at"])
+            event["detail"].update(decision="auto_approved", channel="policy")
+            event["detail"].pop("wait_ms", None)
+        if event["event_type"] == "resolution.emitted":
+            event["detail"]["decision"] = "auto_approved"
+    standing["resolutions"][0]["decision"] = "auto_approved"
+    standing = rebind_action(standing, "email.send", standing["proposal"]["payload"])
+    write("standing-grant-envelope.json", standing)
+    write("standing-grant-approval-record.json", standing["approvals"][0])
+
     granted = deepcopy(base)
     granted["request"]["policy"]["requirements"]["require_execution_grant"] = True
     dispatch = granted["dispatches"][0]
