@@ -1,0 +1,8 @@
+{
+  "command": ["git", "push", "origin", "release/2026-04"],
+  "working_directory": "/srv/builds/billing-service",
+  "environment": {"id": "ci-runner-07", "kind": "container"},
+  "tty": false,
+  "network": "restricted",
+  "timeout_seconds": 120
+}

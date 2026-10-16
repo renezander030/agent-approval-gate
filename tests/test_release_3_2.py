@@ -9,7 +9,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from generate_examples import refresh_audit  # noqa: E402
+from test_release_3_1 import rebind  # noqa: E402
 from validate_contracts import digest, load, schema_catalog, validate_envelope, validator_for  # noqa: E402
+
+LOCAL_ACTION_TYPES = ("shell.exec", "file.write")
 
 
 def schema_errors(schema: str, instance: object) -> list[str]:
@@ -38,6 +41,36 @@ def prompt_channel_envelope(channel: str) -> dict:
         if event["event_type"] == "approval.decided":
             event["detail"]["channel"] = channel
     return rebind_approval(envelope)
+
+
+class LocalActionCatalogTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.envelope = load("examples/approval-envelope.json")
+
+    def test_complete_lifecycle_for_each_local_action(self) -> None:
+        for action_type in LOCAL_ACTION_TYPES:
+            with self.subTest(action_type=action_type):
+                payload = load(f"examples/actions/{action_type}.json")
+                self.assertEqual(validate_envelope(rebind(self.envelope, action_type, payload)), [])
+
+    def test_review_shows_where_the_action_runs(self) -> None:
+        for action_type, field in (("shell.exec", "working_directory"), ("shell.exec", "environment"),
+                                   ("file.write", "environment"), ("file.write", "path")):
+            with self.subTest(action_type=action_type, field=field):
+                envelope = rebind(self.envelope, action_type, load(f"examples/actions/{action_type}.json"))
+                review = envelope["review_snapshots"][0]
+                review["content"]["target"].pop(field)
+                review["content_hash"] = digest(review["content"])
+                self.assertIn(f"review snapshot {review['snapshot_id']} changes the {action_type} target", validate_envelope(envelope))
+
+    def test_dispatcher_scope_names_the_local_action(self) -> None:
+        envelope = rebind(self.envelope, "shell.exec", load("examples/actions/shell.exec.json"))
+        authority = envelope["authority_snapshots"][0]
+        for subject in authority["subjects"]:
+            subject["scopes"] = ["file.write" if scope == "shell.exec" else scope for scope in subject.get("scopes", [])]
+        authority["authority_digest"] = digest(authority["subjects"])
+        refresh_audit(envelope)
+        self.assertIn(f"authority snapshot {authority['authority_snapshot_id']} does not authorize the action type", validate_envelope(envelope))
 
 
 class PromptChannelTests(unittest.TestCase):

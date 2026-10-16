@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.2.0/schemas/actions/file.write.schema.json",
+  "title": "file.write payload",
+  "description": "Reference payload contract for one file change made by a dispatcher-owned executor: create, overwrite, or append text, or apply a unified diff. The approver sees the path, the environment it is written in, and the write mode.",
+  "x-action-type": "file.write",
+  "x-review-target": ["path", "environment", "mode"],
+  "type": "object",
+  "required": ["path", "environment", "mode"],
+  "additionalProperties": false,
+  "properties": {
+    "path": {"type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?:/|[A-Za-z]:[\\\\/])(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$))[^\\u0000]*$"},
+    "environment": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "kind": {"type": "string", "enum": ["host", "sandbox", "container", "remote"]}
+      }
+    },
+    "mode": {"type": "string", "enum": ["create", "overwrite", "append", "patch"]},
+    "content_text": {"type": "string", "maxLength": 1048576},
+    "unified_diff": {"type": "string", "minLength": 1, "maxLength": 1048576}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"mode": {"const": "patch"}}, "required": ["mode"]},
+      "then": {"required": ["unified_diff"], "not": {"required": ["content_text"]}},
+      "else": {"required": ["content_text"], "not": {"required": ["unified_diff"]}}
+    }
+  ]
+}

