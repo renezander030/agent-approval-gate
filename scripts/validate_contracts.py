@@ -424,6 +424,28 @@ def validate_envelope(envelope: Any, schema_files: dict[str, Path] | None = None
         return ["envelope contains invalid semantic input"]
 
 
+def execution_grant_manifest(dispatch: dict[str, Any]) -> dict[str, Any]:
+    """The identities a provider or tool can check before it acts: one dispatch of one approved action."""
+    return {
+        "request_id": dispatch["request_id"],
+        "dispatch_id": dispatch["dispatch_id"],
+        "proposal_id": dispatch["proposal_id"],
+        "action_hash": dispatch["action_hash"],
+        "approval_ids": sorted(dispatch["approval_ids"]),
+        "authority_snapshot_id": dispatch["authority_snapshot_id"],
+        "idempotency_key": dispatch["idempotency_key"],
+        "attempt": dispatch["attempt"],
+    }
+
+
+def execution_grant_errors(dispatch: dict[str, Any]) -> list[str]:
+    if "execution_grant" not in dispatch:
+        return []
+    if dispatch["execution_grant"]["digest"] != digest(execution_grant_manifest(dispatch)):
+        return [f"dispatch {dispatch['dispatch_id']} execution grant does not bind this dispatch"]
+    return []
+
+
 def dispatch_history_errors(dispatches: list[dict[str, Any]], request: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     previous: dict[str, Any] | None = None
@@ -1150,6 +1172,9 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
         if dispatch["attempt"] > dispatch["max_attempts"]:
             errors.append(f"dispatch {dispatch['dispatch_id']} exceeds max_attempts")
         started_at = parse_time(dispatch["started_at"])
+        errors.extend(execution_grant_errors(dispatch))
+        if requirements.get("require_execution_grant") and dispatch["status"] in invocation_statuses and "execution_grant" not in dispatch:
+            errors.append(f"dispatch {dispatch['dispatch_id']} lacks a required execution grant")
         authority = authority_by_id.get(dispatch.get("authority_snapshot_id"))
         if authority is None:
             if dispatch["status"] in invocation_statuses or "authority_snapshot_id" in dispatch:
@@ -1176,6 +1201,10 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
                 errors.append(
                     f"dispatch {dispatch['dispatch_id']} used inactive authority"
                 )
+            if "execution_grant" in dispatch:
+                issued_at = parse_time(dispatch["execution_grant"]["issued_at"])
+                if issued_at < checked_at or issued_at > started_at:
+                    errors.append(f"dispatch {dispatch['dispatch_id']} execution grant was issued outside its authority check and invocation")
             cited_approval_times = [
                 parse_time(approval_by_id[item]["recorded_at"])
                 for item in dispatch["approval_ids"]
@@ -1462,6 +1491,8 @@ def record_errors(kind: str, record: Any) -> list[str]:
         errors.append(f"{location}: {error.message}")
     if not errors and kind == "approval-record":
         errors.extend(webauthn_signature_errors(record))
+    if not errors and kind == "dispatch-record":
+        errors.extend(execution_grant_errors(record))
     if not errors and kind == "approval-policy":
         errors.extend(policy_rule_errors(record))
     if not errors and kind == "approval-request":

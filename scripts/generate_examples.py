@@ -14,7 +14,9 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from validate_contracts import digest as digest_value, encode_base64url as base64url  # noqa: E402
+from validate_contracts import (  # noqa: E402
+    digest as digest_value, encode_base64url as base64url, execution_grant_manifest,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -187,6 +189,14 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     recovered["captured_at"] = recovered["audit_snapshot"]["captured_at"] = "2026-04-28T09:14:38Z"
     refresh_audit(recovered)
     write("recovered-envelope.json", recovered)
+
+    granted = deepcopy(base)
+    granted["request"]["policy"]["requirements"]["require_execution_grant"] = True
+    dispatch = granted["dispatches"][0]
+    dispatch["execution_grant"] = {"digest": digest_value(execution_grant_manifest(dispatch)), "issued_at": dispatch["started_at"]}
+    write("granted-dispatch-record.json", dispatch)
+    refresh_audit(granted)
+    write("granted-envelope.json", granted)
 
 
 def main() -> None:

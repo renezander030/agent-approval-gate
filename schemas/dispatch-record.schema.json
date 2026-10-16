@@ -103,6 +103,16 @@
         "checked_at": {"type": "string", "format": "date-time"},
         "evidence": {"$ref": "common.schema.json#/$defs/evidence_reference"}
       }
+    },
+    "execution_grant": {
+      "description": "What the dispatcher hands the provider or tool with the invocation: the RFC 8785/SHA-256 digest of the grant manifest (request_id, dispatch_id, proposal_id, action_hash, sorted approval_ids, authority_snapshot_id, idempotency_key, attempt), issued after the authority check and before the invocation.",
+      "type": "object",
+      "required": ["digest", "issued_at"],
+      "additionalProperties": false,
+      "properties": {
+        "digest": {"$ref": "common.schema.json#/$defs/digest"},
+        "issued_at": {"type": "string", "format": "date-time"}
+      }
     }
   },
   "allOf": [
@@ -209,7 +219,8 @@
         "properties": {"status": {"enum": ["succeeded", "failed", "outcome_unknown"]}},
         "required": ["status"]
       },
-      "then": {"required": ["authority_snapshot_id"]}
+      "then": {"required": ["authority_snapshot_id"]},
+      "else": {"not": {"required": ["execution_grant"]}}
     }
   ]
 }

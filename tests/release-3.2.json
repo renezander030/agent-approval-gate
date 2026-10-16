@@ -14,6 +14,17 @@
       "name": "policy outcome with its matched rules",
       "schema": "schemas/approval-policy.schema.json",
       "instance": "examples/approval-policy-rules.json"
+    },
+    {
+      "name": "dispatch with an execution grant",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/granted-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "standalone dispatch record with an execution grant",
+      "schema": "schemas/dispatch-record.schema.json",
+      "instance": "examples/granted-dispatch-record.json"
     }
   ],
   "negative": [
@@ -155,6 +166,55 @@
           "op": "add",
           "path": "/request/policy/evaluation_status",
           "value": "evaluator_unavailable"
+        }
+      ]
+    },
+    {
+      "name": "execution grant replayed on another dispatch attempt",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/granted-envelope.json",
+      "expect": "semantic",
+      "expect_error": "execution grant does not bind this dispatch",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/dispatches/0/idempotency_key",
+          "value": "idem_email_ZD-48211_reply_02"
+        }
+      ]
+    },
+    {
+      "name": "invocation without a required execution grant",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/granted-envelope.json",
+      "expect": "semantic",
+      "expect_error": "lacks a required execution grant",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/dispatches/0/execution_grant"
+        }
+      ]
+    },
+    {
+      "name": "execution grant on a refusal",
+      "schema": "schemas/dispatch-record.schema.json",
+      "instance": "examples/granted-dispatch-record.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/status",
+          "value": "not_dispatched"
+        },
+        {
+          "op": "add",
+          "path": "/reason",
+          "value": "approval_revoked"
+        },
+        {
+          "op": "remove",
+          "path": "/provider"
         }
       ]
     }

@@ -86,6 +86,10 @@
           "type": "string",
           "enum": ["deny", "require_human_approval"]
         },
+        "require_execution_grant": {
+          "description": "Every provider invocation must carry an execution grant bound to its dispatch.",
+          "type": "boolean"
+        },
         "human_required_effects": {
           "description": "Effects that require every approving decision to come from a human. destructive and open_world fire on a true hint; not_idempotent and not_read_only fire on a false hint. An undeclared hint takes its conservative value.",
           "type": "array",

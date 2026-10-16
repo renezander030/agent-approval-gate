@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from generate_examples import refresh_audit  # noqa: E402
 from test_release_3_1 import rebind  # noqa: E402
 from validate_contracts import (  # noqa: E402
-    digest, effect_errors, load, main, policy_outcome_errors, policy_rule_errors, schema_catalog, validate_envelope, validator_for,
+    digest, effect_errors, execution_grant_manifest, load, main, policy_outcome_errors, policy_rule_errors, schema_catalog, validate_envelope, validator_for,
 )
 
 LOCAL_ACTION_TYPES = ("shell.exec", "file.write")
@@ -185,6 +185,52 @@ class EvaluatorUnavailableTests(unittest.TestCase):
         policy = unavailable_envelope()["request"]["policy"]
         policy["matched_rules"] = [{"rule_id": "rule.cached", "effect": "require_approval"}]
         self.assertTrue(schema_errors("schemas/approval-policy.schema.json", policy))
+
+
+class ExecutionGrantTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.envelope = load("examples/granted-envelope.json")
+        self.dispatch = self.envelope["dispatches"][0]
+
+    def test_grant_binds_every_dispatch_identity(self) -> None:
+        manifest = execution_grant_manifest(self.dispatch)
+        self.assertEqual(self.dispatch["execution_grant"]["digest"], digest(manifest))
+        for field, value in (("request_id", "req_other_00000001"), ("action_hash", digest("other")),
+                             ("approval_ids", ["approval_other_0001"]), ("attempt", 2)):
+            with self.subTest(field=field):
+                envelope = deepcopy(self.envelope)
+                envelope["dispatches"][0][field] = value
+                refresh_audit(envelope)
+                errors = validate_envelope(envelope)
+                self.assertIn(f"dispatch {self.dispatch['dispatch_id']} execution grant does not bind this dispatch", errors)
+
+    def test_approval_order_does_not_change_the_grant(self) -> None:
+        reordered = deepcopy(self.dispatch)
+        reordered["approval_ids"] = list(reversed(reordered["approval_ids"] + ["approval_second_0001"]))
+        original = deepcopy(self.dispatch)
+        original["approval_ids"] = original["approval_ids"] + ["approval_second_0001"]
+        self.assertEqual(digest(execution_grant_manifest(reordered)), digest(execution_grant_manifest(original)))
+
+    def test_grant_is_issued_between_authority_check_and_invocation(self) -> None:
+        for issued_at in ("2026-04-28T09:14:20Z", "2026-04-28T09:14:40Z"):
+            with self.subTest(issued_at=issued_at):
+                envelope = deepcopy(self.envelope)
+                envelope["dispatches"][0]["execution_grant"]["issued_at"] = issued_at
+                refresh_audit(envelope)
+                self.assertIn(f"dispatch {self.dispatch['dispatch_id']} execution grant was issued outside its authority check and invocation",
+                              validate_envelope(envelope))
+
+    def test_standalone_record_checks_its_grant(self) -> None:
+        record = deepcopy(self.dispatch)
+        record["attempt"] = 2
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "dispatch.json"
+            path.write_text(json.dumps(record), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["--record", "dispatch-record", str(path)]), 1)
+            path.write_text(json.dumps(self.dispatch), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["--record", "dispatch-record", str(path)]), 0)
 
 
 class PromptChannelTests(unittest.TestCase):
