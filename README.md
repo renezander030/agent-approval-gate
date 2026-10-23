@@ -70,7 +70,7 @@ from the agent's point of view.
 | [`audit-event.schema.json`](schemas/audit-event.schema.json) | Redacted lifecycle evidence with actor, event time, ingestion time, and hash chain |
 | [`audit-snapshot.schema.json`](schemas/audit-snapshot.schema.json) | Completeness manifest for one exported audit-event set |
 | [`approval-envelope.schema.json`](schemas/approval-envelope.schema.json) | Portable bundle plus cross-contract profile for a completed lifecycle |
-| [`actions/*.schema.json`](schemas/actions/) | Strict payload references for `email.send`, `crm.update_record`, `ticket.create`, `db.update_row`, `api.call`, `n8n.trigger_workflow`, `shell.exec`, and `file.write`, each naming the fields the approver must see as the target |
+| [`actions/*.schema.json`](schemas/actions/) | Strict payload references for `email.send`, `crm.update_record`, `ticket.create`, `db.update_row`, `api.call`, `n8n.trigger_workflow`, `shell.exec`, `file.write`, and `network.egress`, each naming the fields the approver must see as the target |
 
 Schema IDs are pinned to the `v3.3.0` release. Pin a released ID in production; do not
 resolve schemas from the mutable default branch.

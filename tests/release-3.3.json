@@ -1,6 +1,11 @@
 {
   "positive": [
     {
+      "name": "network.egress reference payload",
+      "schema": "schemas/actions/network.egress.schema.json",
+      "instance": "examples/actions/network.egress.json"
+    },
+    {
       "name": "review relayed through the parent call",
       "schema": "schemas/approval-envelope.schema.json",
       "instance": "examples/delegated-envelope.json",
@@ -311,6 +316,31 @@
           "op": "replace",
           "path": "/request/trace_context/traceparent",
           "value": "00-00000000000000000000000000000000-00f067aa0ba902b7-01"
+        }
+      ]
+    },
+    {
+      "name": "egress to a wildcard host",
+      "schema": "schemas/actions/network.egress.schema.json",
+      "instance": "examples/actions/network.egress.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/host",
+          "value": "*.npmjs.org"
+        }
+      ]
+    },
+    {
+      "name": "egress without a time bound",
+      "schema": "schemas/actions/network.egress.schema.json",
+      "instance": "examples/actions/network.egress.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/max_duration_seconds"
         }
       ]
     }

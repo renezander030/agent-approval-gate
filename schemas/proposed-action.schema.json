@@ -52,7 +52,8 @@
         "api.call",
         "n8n.trigger_workflow",
         "shell.exec",
-        "file.write"
+        "file.write",
+        "network.egress"
       ]
     },
     "payload_schema": {
@@ -151,6 +152,15 @@
       },
       "then": {
         "properties": {"payload": {"$ref": "actions/file.write.schema.json"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"action_type": {"const": "network.egress"}},
+        "required": ["action_type"]
+      },
+      "then": {
+        "properties": {"payload": {"$ref": "actions/network.egress.schema.json"}}
       }
     }
   ]

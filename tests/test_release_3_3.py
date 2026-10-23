@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from generate_examples import refresh_audit  # noqa: E402
+from generate_examples import rebind_action, refresh_audit  # noqa: E402
 from validate_contracts import collection_errors, digest, load, record_errors, validate_envelope  # noqa: E402
 
 
@@ -322,6 +322,34 @@ class TraceContextTests(unittest.TestCase):
     def test_traceparent_shape(self) -> None:
         self.envelope["request"]["trace_context"]["traceparent"] = "4bf92f3577b34da6a3ce929d0e0e4736"
         self.assertEqual(validate_envelope(self.envelope), ["envelope fails structural validation"])
+
+
+class NetworkEgressTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.payload = load("examples/actions/network.egress.json")
+        self.envelope = rebind_action(load("examples/approval-envelope.json"), "network.egress", self.payload)
+
+    def test_complete_egress_lifecycle(self) -> None:
+        self.assertEqual(validate_envelope(self.envelope), [])
+
+    def test_review_shows_destination_environment_and_scope(self) -> None:
+        for field in ("host", "port", "protocol", "environment", "scope"):
+            with self.subTest(field=field):
+                envelope = rebind_action(load("examples/approval-envelope.json"), "network.egress", self.payload)
+                review = envelope["review_snapshots"][0]
+                review["content"]["target"].pop(field)
+                review["content_hash"] = digest(review["content"])
+                self.assertIn(f"review snapshot {review['snapshot_id']} changes the network.egress target", validate_envelope(envelope))
+
+    def test_payload_names_one_destination(self) -> None:
+        for host in ("*.npmjs.org", "https://registry.npmjs.org", "registry.npmjs.org/path", "Registry.npmjs.org"):
+            with self.subTest(host=host):
+                envelope = rebind_action(load("examples/approval-envelope.json"), "network.egress", dict(self.payload, host=host))
+                self.assertEqual(validate_envelope(envelope), ["envelope fails structural validation"])
+
+    def test_methods_only_for_http(self) -> None:
+        envelope = rebind_action(load("examples/approval-envelope.json"), "network.egress", dict(self.payload, protocol="tcp"))
+        self.assertEqual(validate_envelope(envelope), ["envelope fails structural validation"])
 
 
 if __name__ == "__main__":

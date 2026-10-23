@@ -387,6 +387,15 @@ request's trace ID, and an all-zero trace ID is invalid. Trace context is correl
 data: it sits outside the hashed action, so the same action keeps its hash when it is
 re-proposed from another run, and it never stands in for authority.
 
+### Network egress
+
+`network.egress` is a built-in action type with a reference schema for opening
+outbound access from an agent's environment to one host and port. The host is a
+lowercase name or address without a scheme, path, or wildcard; the payload names the
+protocol, the environment it is opened from, whether it covers a `single_connection` or
+a `session`, and `max_duration_seconds`. HTTP methods may be limited for `http` and
+`https` only. The review target is the host, port, protocol, environment, and scope.
+
 ## WebAuthn approval proof
 
 `webauthn-es256` is an optional signature profile for authenticated web approvals.
