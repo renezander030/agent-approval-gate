@@ -90,6 +90,10 @@
           "description": "Every auto approval must cite a human's standing grant that covers the action.",
           "type": "boolean"
         },
+        "require_grant_origin": {
+          "description": "Every standing grant an auto approval cites must name the human approval that issued it.",
+          "type": "boolean"
+        },
         "require_execution_grant": {
           "description": "Every provider invocation must carry an execution grant bound to its dispatch.",
           "type": "boolean"

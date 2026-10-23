@@ -366,6 +366,32 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     refresh_audit(denied)
     write("policy-denied-envelope.json", denied)
 
+    issuing = json.loads(json.dumps(base).replace("2026-04-28T", "2026-04-27T").replace("_2026-04-28_", "_2026-04-27_"))
+    issuing["proposal"]["idempotency_key"] = issuing["dispatches"][0]["idempotency_key"] = "idem_2026-04-27_reply-ticket-48213"
+    issuing = rebind_action(issuing, issuing["proposal"]["action_type"], issuing["proposal"]["payload"])
+    for event in issuing["audit_events"]:
+        event["stream_id"] = "stream_prop_27f1a2c4"
+    issuing["audit_snapshot"]["stream_id"] = "stream_prop_27f1a2c4"
+    approval = issuing["approvals"][0]
+    approval["issued_grant"] = {
+        "grant_id": "grant_2026-04-27_support-replies-week", "granted_at": approval["decided_at"], "expires_at": "2026-05-04T09:14:30Z",
+        "scope": {"tenant": issuing["proposal"]["tenant"], "action_types": ["email.send"], "max_risk": "medium"}, "max_uses": 200,
+    }
+    issuing["resolutions"][0]["approval_record_hash"] = digest_value(approval)
+    refresh_audit(issuing)
+    write("grant-issuing-envelope.json", issuing)
+
+    cited = load("standing-grant-envelope.json")
+    cited["request"]["policy"]["requirements"]["require_grant_origin"] = True
+    issued = approval["issued_grant"]
+    grant = cited["approvals"][0]["standing_grant"]
+    grant.update(grant_id=issued["grant_id"], granted_by=deepcopy(approval["decided_by"]), granted_at=issued["granted_at"],
+                 expires_at=issued["expires_at"], scope=deepcopy(issued["scope"]), max_uses=issued["max_uses"], use_number=1,
+                 origin={"request_id": approval["request_id"], "approval_id": approval["approval_id"]})
+    cited["resolutions"][0]["approval_record_hash"] = digest_value(cited["approvals"][0])
+    refresh_audit(cited)
+    write("grant-origin-envelope.json", cited)
+
 
 def main() -> None:
     proposal = load("email-reply-approval.json")

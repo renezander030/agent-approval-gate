@@ -90,7 +90,30 @@
           }
         },
         "max_uses": {"type": "integer", "minimum": 1, "maximum": 10000},
-        "use_number": {"type": "integer", "minimum": 1, "maximum": 10000}
+        "use_number": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "origin": {
+          "description": "The human approval that issued this grant.",
+          "type": "object",
+          "required": ["request_id", "approval_id"],
+          "additionalProperties": false,
+          "properties": {
+            "request_id": {"$ref": "common.schema.json#/$defs/identifier"},
+            "approval_id": {"$ref": "common.schema.json#/$defs/identifier"}
+          }
+        }
+      }
+    },
+    "issued_grant": {
+      "description": "A standing grant this human approval explicitly issued in addition to approving its own action. Its granting human is the approver; without it, an approval covers its own action only.",
+      "type": "object",
+      "required": ["grant_id", "granted_at", "expires_at", "scope", "max_uses"],
+      "additionalProperties": false,
+      "properties": {
+        "grant_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "granted_at": {"type": "string", "format": "date-time"},
+        "expires_at": {"type": "string", "format": "date-time"},
+        "scope": {"$ref": "#/properties/standing_grant/properties/scope"},
+        "max_uses": {"type": "integer", "minimum": 1, "maximum": 10000}
       }
     },
     "rejection_settlement": {

@@ -22,6 +22,18 @@
       "schema": "schemas/approval-envelope.schema.json",
       "instance": "examples/policy-denied-envelope.json",
       "semantic": true
+    },
+    {
+      "name": "human approval that also issues a standing grant",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/grant-issuing-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "auto approval naming the approval that issued its grant",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/grant-origin-envelope.json",
+      "semantic": true
     }
   ],
   "negative": [
@@ -183,6 +195,40 @@
         {
           "op": "remove",
           "path": "/request/policy_refusal/policy_owner"
+        }
+      ]
+    },
+    {
+      "name": "rejection that issues a standing grant",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/grant-issuing-envelope.json",
+      "expect": "semantic",
+      "expect_error": "without approving",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/approvals/0/decision",
+          "value": "rejected"
+        },
+        {
+          "op": "add",
+          "path": "/approvals/0/rejection_settlement",
+          "value": {
+            "state": "unresolved"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required grant origin missing",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/grant-origin-envelope.json",
+      "expect": "semantic",
+      "expect_error": "does not name the approval that issued it",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/approvals/0/standing_grant/origin"
         }
       ]
     }

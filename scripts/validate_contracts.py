@@ -749,6 +749,28 @@ def standing_grant_errors(
         for conflict, issuer in (("agent", "the delegated agent"), ("requester", "the requester"), ("excluded", "an excluded actor")):
             if conflict in conflicts:
                 errors.append(f"{label} standing grant was issued by {issuer}")
+        if requirements.get("require_grant_origin") and "origin" not in grant:
+            errors.append(f"{label} standing grant does not name the approval that issued it")
+    return errors
+
+
+def grant_issuance_errors(proposal: dict[str, Any], approvals: list[dict[str, Any]]) -> list[str]:
+    """Only an approving decision, which the schema ties to a present human, issues a standing grant, from its decision onward."""
+    errors: list[str] = []
+    for approval in approvals:
+        issued = approval.get("issued_grant")
+        if issued is None:
+            continue
+        label = f"approval {approval['approval_id']} issues standing grant {issued['grant_id']}"
+        if approval["decision"] != "approved":
+            errors.append(f"{label} without approving")
+        granted_at = parse_time(issued["granted_at"])
+        if granted_at < parse_time(approval["decided_at"]):
+            errors.append(f"{label} before its decision")
+        if parse_time(issued["expires_at"]) <= granted_at:
+            errors.append(f"{label} that expires before it starts")
+        if issued["scope"]["tenant"] != proposal["tenant"]:
+            errors.append(f"{label} for another tenant")
     return errors
 
 
@@ -1188,6 +1210,7 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
     errors.extend(effect_errors(proposal, review_snapshots, request, approvals))
     errors.extend(precondition_errors(proposal, review_snapshots, dispatches))
     errors.extend(standing_grant_errors(proposal, request, approvals))
+    errors.extend(grant_issuance_errors(proposal, approvals))
     errors.extend(relay_errors(proposal, request, approvals, events))
     errors.extend(lifecycle_notice_errors(envelope))
     errors.extend(escalation_errors(request, events))
@@ -1783,9 +1806,11 @@ def collection_errors(envelopes: list[dict[str, Any]]) -> list[str]:
     """Identities that must stay unique across every lifecycle a deployment admitted."""
     errors: list[str] = []
     seen: dict[str, dict[Any, int]] = {
-        "proposal_id": {}, "request_id": {}, "call": {}, "dispatch_id": {}, "audit_stream": {}, "grant_use": {},
+        "proposal_id": {}, "request_id": {}, "call": {}, "dispatch_id": {}, "audit_stream": {}, "grant_use": {}, "grant_issue": {},
     }
     grants: dict[str, tuple[int, str]] = {}
+    cited: list[tuple[int, dict[str, Any]]] = []
+    approvals_by_id: dict[str, tuple[int, dict[str, Any]]] = {}
     idempotency: dict[tuple[str, str], tuple[int, str]] = {}
 
     def claim(kind: str, key: Any, index: int, message: str) -> None:
@@ -1809,11 +1834,28 @@ def collection_errors(envelopes: list[dict[str, Any]]) -> list[str]:
             if grants.setdefault(grant["grant_id"], (index, terms))[1] != terms:
                 errors.append(f"envelopes {grants[grant['grant_id']][0]} and {index}: standing grant {grant['grant_id']} changes its terms")
             claim("grant_use", (grant["grant_id"], grant["use_number"]), index, f"use standing grant {grant['grant_id']} number {grant['use_number']} twice")
+            if "origin" in grant:
+                cited.append((index, grant))
+        for approval in envelope["approvals"]:
+            approvals_by_id.setdefault(approval["approval_id"], (index, approval))
+            if "issued_grant" in approval:
+                claim("grant_issue", approval["issued_grant"]["grant_id"], index, f"issue standing grant {approval['issued_grant']['grant_id']} twice")
         key = (proposal["tenant"], proposal["idempotency_key"])
         action_hash = digest(proposal)
         if key in idempotency and idempotency[key][1] != action_hash:
             errors.append(f"envelopes {idempotency[key][0]} and {index}: idempotency_key binds two different actions")
         idempotency.setdefault(key, (index, action_hash))
+    for index, grant in cited:
+        origin = grant["origin"]
+        if origin["approval_id"] not in approvals_by_id:
+            continue
+        source, approval = approvals_by_id[origin["approval_id"]]
+        issued = approval.get("issued_grant")
+        prefix = f"envelopes {source} and {index}: standing grant {grant['grant_id']}"
+        if issued is None or issued["grant_id"] != grant["grant_id"] or approval["request_id"] != origin["request_id"]:
+            errors.append(f"{prefix} names approval {origin['approval_id']}, which did not issue it")
+        elif grant["granted_by"] != approval["decided_by"] or any(grant[key] != issued[key] for key in ("granted_at", "expires_at", "scope", "max_uses")):
+            errors.append(f"{prefix} changes the terms its approval issued")
     return errors
 
 

@@ -347,6 +347,19 @@ agrees with the snapshot: `denied_by_rule` needs those rules, `no_matching_rule`
 empty `matched_rules`, and `evaluator_unavailable` an unavailable evaluator. A refusal
 never reopens the request; a revised action is a new proposal.
 
+### Where a standing grant came from
+
+"Approve" and "always allow" are different decisions. An approving `ApprovalRecord`
+covers its own action unless it also carries `issued_grant`: the grant ID, start,
+expiry, scope, and use ceiling the approver explicitly granted. Only an `approved`
+decision, which is always a present human's, issues a grant, for the proposal's tenant, starting no
+earlier than the decision, and its granting human is the approver.
+
+An auto approval's `standing_grant.origin` names the request and approval that issued
+the grant, and `requirements.require_grant_origin` makes that mandatory. Across a set of
+envelopes the validator checks that the named approval issued that grant with the same
+terms and the same human, and that no grant is issued twice.
+
 ## WebAuthn approval proof
 
 `webauthn-es256` is an optional signature profile for authenticated web approvals.

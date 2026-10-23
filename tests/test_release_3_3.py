@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from generate_examples import refresh_audit  # noqa: E402
-from validate_contracts import load, record_errors, validate_envelope  # noqa: E402
+from validate_contracts import collection_errors, digest, load, record_errors, validate_envelope  # noqa: E402
 
 
 class DelegatedRelayTests(unittest.TestCase):
@@ -175,6 +175,49 @@ class PolicyRefusalTests(unittest.TestCase):
         self.assertEqual(validate_envelope(self.envelope), [])
         self.refusal["reason_code"] = "no_matching_rule"
         self.assertIn("policy refusal reason disagrees with the policy snapshot", validate_envelope(self.envelope))
+
+
+class GrantOriginTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.issuing = load("examples/grant-issuing-envelope.json")
+        self.cited = load("examples/grant-origin-envelope.json")
+        self.issued = self.issuing["approvals"][0]["issued_grant"]
+        self.grant = self.cited["approvals"][0]["standing_grant"]
+
+    def test_issuing_and_citing_lifecycles(self) -> None:
+        self.assertEqual(validate_envelope(self.issuing), [])
+        self.assertEqual(validate_envelope(self.cited), [])
+        self.assertEqual(collection_errors([self.issuing, self.cited]), [])
+
+    def test_only_an_approving_decision_issues_a_grant(self) -> None:
+        approval = self.issuing["approvals"][0]
+        approval.update(decision="rejected", rejection_settlement={"state": "unresolved"})
+        self.assertIn(f"approval {approval['approval_id']} issues standing grant {self.issued['grant_id']} without approving",
+                      validate_envelope(self.issuing))
+
+    def test_grant_starts_at_or_after_the_decision(self) -> None:
+        self.issued["granted_at"] = "2026-04-27T09:14:00Z"
+        approval_id = self.issuing["approvals"][0]["approval_id"]
+        self.assertIn(f"approval {approval_id} issues standing grant {self.issued['grant_id']} before its decision", validate_envelope(self.issuing))
+
+    def test_policy_can_require_the_origin(self) -> None:
+        self.grant.pop("origin")
+        approval_id = self.cited["approvals"][0]["approval_id"]
+        self.assertIn(f"approval {approval_id} standing grant does not name the approval that issued it", validate_envelope(self.cited))
+
+    def test_origin_must_have_issued_the_grant(self) -> None:
+        self.issuing["approvals"][0].pop("issued_grant")
+        self.assertIn(f"envelopes 0 and 1: standing grant {self.grant['grant_id']} names approval {self.grant['origin']['approval_id']}, which did not issue it",
+                      collection_errors([self.issuing, self.cited]))
+
+    def test_cited_terms_match_the_issued_terms(self) -> None:
+        self.grant["max_uses"] = 1000
+        self.assertIn(f"envelopes 0 and 1: standing grant {self.grant['grant_id']} changes the terms its approval issued",
+                      collection_errors([self.issuing, self.cited]))
+
+    def test_a_grant_is_issued_once(self) -> None:
+        second = load("examples/grant-issuing-envelope.json")
+        self.assertIn(f"envelopes 0 and 1: issue standing grant {self.issued['grant_id']} twice", collection_errors([self.issuing, second]))
 
 
 if __name__ == "__main__":
