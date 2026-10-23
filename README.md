@@ -125,6 +125,18 @@ channels. [`docs/framework-mapping.md`](docs/framework-mapping.md) maps LangGrap
 the OpenAI Agents SDK, the Vercel AI SDK, Google ADK, pydantic-ai, Mastra, MCP, and
 coding-agent hooks onto the records.
 
+Version 3.3 makes waiting, delegated, and refused approvals legible. A
+[delegated](examples/delegated-envelope.json) call's request records how its review
+climbed the delegation chain, and a relaying agent never decides. A pending notice tells
+the agent and its parent calls that a human is deciding, until when, and how to resume.
+Pending requests can be [escalated](examples/escalated-envelope.json) to named actors
+without widening who may decide, and a request [replaced](examples/superseded-envelope.json)
+by a newer one points at its successor. A [policy denial](examples/policy-denied-envelope.json)
+names its rule, owner, and next step; the policy snapshot can name an external decision
+point and its decision ID. A standing grant can name the [human approval that issued
+it](examples/grant-issuing-envelope.json), lifecycles can carry W3C trace context, and
+`network.egress` joins the action catalog.
+
 [`tests/canonicalization.json`](tests/canonicalization.json) is a language-neutral
 RFC 8785 corpus with exact canonical UTF-8 bytes and SHA-256 results. Use it to prove
 that implementations in different languages bind the same document to the same hash.

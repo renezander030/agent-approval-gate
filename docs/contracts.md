@@ -562,3 +562,6 @@ any implementation language.
 feedback, the MCP elicitation channel, and the reference action schemas.
 `tests/release-3.2.json` covers rule precedence, effect hints, standing grants, target
 preconditions, execution grants, and the local action schemas.
+`tests/release-3.3.json` covers relayed reviews, pending notices, escalation, policy
+refusals, issued grants, external decision points, supersession, trace context, and the
+`network.egress` schema.
