@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.2.0/schemas/actions/db.update_row.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.3.0/schemas/actions/db.update_row.schema.json",
   "title": "db.update_row payload",
   "description": "Reference payload contract for a single-row database update. The key and the expected row version bound the update to exactly one reviewed row; there is no free-form query.",
   "x-action-type": "db.update_row",

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.2.0/schemas/actions/shell.exec.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.3.0/schemas/actions/shell.exec.schema.json",
   "title": "shell.exec payload",
   "description": "Reference payload contract for one command run by a dispatcher-owned executor. The command is an argument vector executed without a shell, so the reviewed arguments are exactly what runs. The approver sees the command together with the directory and environment it runs in.",
   "x-action-type": "shell.exec",
