@@ -42,7 +42,7 @@
       "minItems": 1,
       "maxItems": 16,
       "uniqueItems": true,
-      "items": {"type": "string", "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli", "policy"]}
+      "items": {"type": "string", "$ref": "common.schema.json#/$defs/channel"}
     },
     "resume": {
       "description": "await_resolution: the gate delivers the ResolutionRecord to the caller. poll_request: the caller reads the request state by request_id, no earlier than next_check_at.",

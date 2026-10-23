@@ -82,18 +82,12 @@
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": {
-            "type": "string",
-            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli", "policy"]
-          }
+          "items": {"type": "string", "$ref": "common.schema.json#/$defs/channel"}
         },
         "signature_required_channels": {
           "type": "array",
           "uniqueItems": true,
-          "items": {
-            "type": "string",
-            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli", "policy"]
-          }
+          "items": {"type": "string", "$ref": "common.schema.json#/$defs/channel"}
         },
         "allow_auto_approval": {"type": "boolean"},
         "on_evaluator_unavailable": {

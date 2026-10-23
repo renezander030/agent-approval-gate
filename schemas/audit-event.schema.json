@@ -107,10 +107,7 @@
           "type": "string",
           "enum": ["approved", "rejected", "expired", "cancelled", "auto_approved", "failed"]
         },
-        "channel": {
-          "type": "string",
-          "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli", "policy"]
-        },
+        "channel": {"type": "string", "$ref": "common.schema.json#/$defs/channel"},
         "action_hash": {"$ref": "common.schema.json#/$defs/digest"},
         "payload_hash": {"$ref": "common.schema.json#/$defs/digest"},
         "review_content_hash": {"$ref": "common.schema.json#/$defs/digest"},

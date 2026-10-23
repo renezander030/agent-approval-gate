@@ -250,6 +250,14 @@
         "expected": {"$ref": "#/$defs/safe_text", "maxLength": 256}
       }
     },
+    "channel": {
+      "description": "Where a decision was requested or made. policy is the automatic path; every other value is a channel a human answers on.",
+      "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli", "policy"]
+    },
+    "prompt_channel": {
+      "description": "A channel a human answers on: every channel except policy.",
+      "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli"]
+    },
     "trace_context": {
       "description": "W3C Trace Context of the agent run, so approval records join its distributed trace. It is correlation data, not evidence of authority.",
       "type": "object",

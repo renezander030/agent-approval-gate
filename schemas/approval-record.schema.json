@@ -39,10 +39,7 @@
     "decided_by": {"$ref": "common.schema.json#/$defs/actor"},
     "decided_at": {"type": "string", "format": "date-time"},
     "recorded_at": {"type": "string", "format": "date-time"},
-    "channel": {
-      "type": "string",
-      "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli", "policy"]
-    },
+    "channel": {"type": "string", "$ref": "common.schema.json#/$defs/channel"},
     "comment": {"type": "string", "maxLength": 2000},
     "modifications": {
       "type": "array",
@@ -236,9 +233,7 @@
             },
             "required": ["authentication"]
           },
-          "channel": {
-            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli"]
-          }
+          "channel": {"$ref": "common.schema.json#/$defs/prompt_channel"}
         }
       }
     },

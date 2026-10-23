@@ -51,6 +51,13 @@ def refresh_audit(envelope: dict[str, Any]) -> None:
     )
 
 
+def rebind_approval(envelope: dict[str, Any]) -> dict[str, Any]:
+    """Recompute the resolution receipt and audit chain after editing the approval record."""
+    envelope["resolutions"][0]["approval_record_hash"] = digest_value(envelope["approvals"][0])
+    refresh_audit(envelope)
+    return envelope
+
+
 def refuse_dispatch(envelope: dict[str, Any], reason: str, **changes: Any) -> dict[str, Any]:
     """Turn the lifecycle's dispatch into a not_dispatched refusal, and its audit witness with it."""
     dispatch = envelope["dispatches"][0]
@@ -61,6 +68,32 @@ def refuse_dispatch(envelope: dict[str, Any], reason: str, **changes: Any) -> di
             event.update(event_type="dispatch.not_dispatched", occurred_at=dispatch["completed_at"], recorded_at=dispatch["recorded_at"])
             event["detail"] = {"action_hash": dispatch["action_hash"], "reason_code": reason}
     return dispatch
+
+
+def request_witness(envelope: dict[str, Any], event_id: str, event_type: str, at: str, detail: dict[str, Any]) -> dict[str, Any]:
+    """An audit event about the request itself at one time, shaped like its approval.requested witness."""
+    event = deepcopy(next(e for e in envelope["audit_events"] if e["event_type"] == "approval.requested"))
+    event.update(event_id=event_id, event_type=event_type, occurred_at=at, recorded_at=at,
+                 references={"request_id": envelope["request"]["request_id"]}, detail=detail)
+    return event
+
+
+def end_before_decision(envelope: dict[str, Any], status: str, reason: str, at: str,
+                        witness: dict[str, Any] | None = None, captured_at: str | None = None) -> dict[str, Any]:
+    """End the lifecycle before any decision: the request turns terminal, later records go, and the audit stream stops after the review."""
+    request = envelope["request"]
+    request.update(status=status, revision=2, terminal_at=at, terminal_reason=reason)
+    for key in ("consumed_at", "dispatch_id", "decision_record_id"):
+        request.pop(key)
+    for key in ("approvals", "resolutions", "authority_snapshots", "dispatches"):
+        envelope[key] = []
+    captured_at = captured_at or at
+    snapshot_event = deepcopy(envelope["audit_events"][-1])
+    snapshot_event.update(occurred_at=captured_at, recorded_at=captured_at)
+    envelope["audit_events"] = envelope["audit_events"][:4] + ([witness] if witness else []) + [snapshot_event]
+    envelope["captured_at"] = envelope["audit_snapshot"]["captured_at"] = captured_at
+    refresh_audit(envelope)
+    return request
 
 
 def rebind_action(envelope: dict[str, Any], action_type: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -173,18 +206,9 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
 
     expired = deepcopy(base)
     expiry = expired["request"]["expires_at"]
-    expired["request"].update(status="expired", revision=2, terminal_at=expiry, terminal_reason="deadline_elapsed")
-    for key in ("consumed_at", "dispatch_id", "decision_record_id"):
-        expired["request"].pop(key)
-    for key in ("approvals", "resolutions", "authority_snapshots", "dispatches"):
-        expired[key] = []
     expiry_event = deepcopy(expired["audit_events"][4])
     expiry_event.update(event_type="approval.expired", occurred_at=expiry, recorded_at=expiry, actor=deepcopy(expired["request"]["requested_by"]), references={"request_id": expired["request"]["request_id"]}, detail={"reason_code": "deadline_elapsed"})
-    snapshot_event = deepcopy(expired["audit_events"][-1])
-    snapshot_event.update(occurred_at=expiry, recorded_at=expiry)
-    expired["audit_events"] = expired["audit_events"][:4] + [expiry_event, snapshot_event]
-    expired["captured_at"] = expired["audit_snapshot"]["captured_at"] = expiry
-    refresh_audit(expired)
+    end_before_decision(expired, "expired", "deadline_elapsed", expiry, expiry_event)
     write("expired-envelope.json", expired)
 
     revoked = deepcopy(base)
@@ -321,9 +345,7 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     request = delegated["request"]
     request["parent_call_id"] = root["call_id"]
     request["relay"] = [{"call_id": root["call_id"], "agent_identity": root["agent"]["identity"], "relayed_at": "2026-04-28T09:14:27Z"}]
-    relay_event = deepcopy(next(e for e in delegated["audit_events"] if e["event_type"] == "approval.requested"))
-    relay_event.update(event_id="event_relayed_01", event_type="approval.relayed", occurred_at="2026-04-28T09:14:27Z", recorded_at="2026-04-28T09:14:27Z",
-                       references={"request_id": request["request_id"]}, detail={"metadata": {"call_id": root["call_id"]}})
+    relay_event = request_witness(delegated, "event_relayed_01", "approval.relayed", "2026-04-28T09:14:27Z", {"metadata": {"call_id": root["call_id"]}})
     relay_event["actor"]["identifier"] = root["agent"]["identity"]
     index = next(i for i, e in enumerate(delegated["audit_events"]) if e["event_type"] == "approval.decided")
     delegated["audit_events"].insert(index, relay_event)
@@ -345,9 +367,7 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     request = escalated["request"]
     request["policy"]["requirements"]["escalation"] = {"after_seconds": 2, "notify_actor_ids": ["support-lead-oncall@acme-corp.example"]}
     request["escalations"] = [{"escalated_at": "2026-04-28T09:14:28Z", "notified_actor_ids": ["support-lead-oncall@acme-corp.example"], "channel": "email"}]
-    escalation_event = deepcopy(next(e for e in escalated["audit_events"] if e["event_type"] == "approval.requested"))
-    escalation_event.update(event_id="event_escalated_01", event_type="approval.escalated", occurred_at="2026-04-28T09:14:28Z", recorded_at="2026-04-28T09:14:28Z",
-                            references={"request_id": request["request_id"]}, detail={"channel": "email", "reason_code": "no_decision_yet"})
+    escalation_event = request_witness(escalated, "event_escalated_01", "approval.escalated", "2026-04-28T09:14:28Z", {"channel": "email", "reason_code": "no_decision_yet"})
     index = next(i for i, e in enumerate(escalated["audit_events"]) if e["event_type"] == "approval.decided")
     escalated["audit_events"].insert(index, escalation_event)
     refresh_audit(escalated)
@@ -360,21 +380,12 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
         {"rule_id": "rule.email.external-recipient", "effect": "require_approval"},
         {"rule_id": "rule.email.legal-hold-account", "effect": "deny"},
     ], outcome_reason="The recipient account is under a legal hold.")
-    request.update(status="failed", revision=2, terminal_at=request["requested_at"], terminal_reason="policy_failed")
-    for key in ("consumed_at", "dispatch_id", "decision_record_id"):
-        request.pop(key)
+    end_before_decision(denied, "failed", "policy_failed", request["requested_at"], captured_at="2026-04-28T09:14:27Z")
     request["policy_refusal"] = {
         "evaluation_id": policy["evaluation_id"], "reason_code": "denied_by_rule", "rule_ids": ["rule.email.legal-hold-account"],
         "message": "Replies to accounts under a legal hold go through the legal team, not the support queue.",
         "policy_owner": "legal-ops@acme-corp.example", "next_step": "contact_policy_owner",
     }
-    for key in ("approvals", "resolutions", "authority_snapshots", "dispatches"):
-        denied[key] = []
-    snapshot_event = deepcopy(denied["audit_events"][-1])
-    snapshot_event.update(occurred_at="2026-04-28T09:14:27Z", recorded_at="2026-04-28T09:14:27Z")
-    denied["audit_events"] = denied["audit_events"][:4] + [snapshot_event]
-    denied["captured_at"] = denied["audit_snapshot"]["captured_at"] = "2026-04-28T09:14:27Z"
-    refresh_audit(denied)
     write("policy-denied-envelope.json", denied)
 
     issuing = earlier_lifecycle(base)
@@ -383,8 +394,7 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
         "grant_id": "grant_2026-04-27_support-replies-week", "granted_at": approval["decided_at"], "expires_at": "2026-05-04T09:14:30Z",
         "scope": {"tenant": issuing["proposal"]["tenant"], "action_types": ["email.send"], "max_risk": "medium"}, "max_uses": 200,
     }
-    issuing["resolutions"][0]["approval_record_hash"] = digest_value(approval)
-    refresh_audit(issuing)
+    rebind_approval(issuing)
     write("grant-issuing-envelope.json", issuing)
 
     cited = load("standing-grant-envelope.json")
@@ -394,27 +404,14 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     grant.update(grant_id=issued["grant_id"], granted_by=deepcopy(approval["decided_by"]), granted_at=issued["granted_at"],
                  expires_at=issued["expires_at"], scope=deepcopy(issued["scope"]), max_uses=issued["max_uses"], use_number=1,
                  origin={"request_id": approval["request_id"], "approval_id": approval["approval_id"]})
-    cited["resolutions"][0]["approval_record_hash"] = digest_value(cited["approvals"][0])
-    refresh_audit(cited)
+    rebind_approval(cited)
     write("grant-origin-envelope.json", cited)
 
     superseded = earlier_lifecycle(base)
-    request = superseded["request"]
     replaced_at = "2026-04-27T09:14:29Z"
-    request.update(status="cancelled", revision=2, terminal_at=replaced_at, terminal_reason="superseded",
-                   superseded_by={"request_id": base["request"]["request_id"], "proposal_id": base["proposal"]["proposal_id"]})
-    for key in ("consumed_at", "dispatch_id", "decision_record_id"):
-        request.pop(key)
-    for key in ("approvals", "resolutions", "authority_snapshots", "dispatches"):
-        superseded[key] = []
-    cancel_event = deepcopy(superseded["audit_events"][2])
-    cancel_event.update(event_id="event_superseded_01", event_type="approval.cancelled", occurred_at=replaced_at, recorded_at=replaced_at,
-                        references={"request_id": request["request_id"]}, detail={"reason_code": "superseded"})
-    snapshot_event = deepcopy(superseded["audit_events"][-1])
-    snapshot_event.update(occurred_at=replaced_at, recorded_at=replaced_at)
-    superseded["audit_events"] = superseded["audit_events"][:4] + [cancel_event, snapshot_event]
-    superseded["captured_at"] = superseded["audit_snapshot"]["captured_at"] = replaced_at
-    refresh_audit(superseded)
+    cancel_event = request_witness(superseded, "event_superseded_01", "approval.cancelled", replaced_at, {"reason_code": "superseded"})
+    request = end_before_decision(superseded, "cancelled", "superseded", replaced_at, cancel_event)
+    request["superseded_by"] = {"request_id": base["request"]["request_id"], "proposal_id": base["proposal"]["proposal_id"]}
     write("superseded-envelope.json", superseded)
 
     traced = deepcopy(base)

@@ -1853,7 +1853,7 @@ def audit_export_errors(
 
 
 def collection_errors(envelopes: list[dict[str, Any]]) -> list[str]:
-    """Identities that must stay unique across every lifecycle a deployment admitted."""
+    """Rules across every lifecycle a deployment admitted: unique identities, standing grant uses, terms and origins, idempotency, and successors."""
     errors: list[str] = []
     seen: dict[str, dict[Any, int]] = {
         "proposal_id": {}, "request_id": {}, "call": {}, "dispatch_id": {}, "audit_stream": {}, "grant_use": {}, "grant_issue": {},
