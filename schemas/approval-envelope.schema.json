@@ -36,6 +36,11 @@
       "items": {"$ref": "review-snapshot.schema.json"}
     },
     "request": {"$ref": "approval-request.schema.json"},
+    "pending_notices": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {"$ref": "approval-pending-notice.schema.json"}
+    },
     "approvals": {
       "type": "array",
       "minItems": 0,

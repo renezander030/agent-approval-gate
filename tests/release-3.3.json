@@ -5,6 +5,11 @@
       "schema": "schemas/approval-envelope.schema.json",
       "instance": "examples/delegated-envelope.json",
       "semantic": true
+    },
+    {
+      "name": "pending notice returned to the parent call",
+      "schema": "schemas/approval-pending-notice.schema.json",
+      "instance": "examples/approval-pending-notice.json"
     }
   ],
   "negative": [
@@ -14,7 +19,13 @@
       "instance": "examples/delegated-envelope.json",
       "expect": "semantic",
       "expect_error": "is not an ancestor of the proposing call",
-      "operations": [{"op": "replace", "path": "/request/relay/0/call_id", "value": "call_2026-04-28_7e19c5ad"}]
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/relay/0/call_id",
+          "value": "call_2026-04-28_7e19c5ad"
+        }
+      ]
     },
     {
       "name": "relaying agent decides the request",
@@ -22,7 +33,13 @@
       "instance": "examples/delegated-envelope.json",
       "expect": "semantic",
       "expect_error": "was decided by a relaying agent",
-      "operations": [{"op": "replace", "path": "/approvals/0/decided_by/identifier", "value": "agent.support-orchestrator.prod"}]
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/approvals/0/decided_by/identifier",
+          "value": "agent.support-orchestrator.prod"
+        }
+      ]
     },
     {
       "name": "relay hop without a request relay",
@@ -30,7 +47,65 @@
       "instance": "examples/delegated-envelope.json",
       "expect": "semantic",
       "expect_error": "approval.relayed witnesses disagree",
-      "operations": [{"op": "remove", "path": "/request/relay"}]
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/request/relay"
+        }
+      ]
+    },
+    {
+      "name": "pending notice that grants",
+      "schema": "schemas/approval-pending-notice.schema.json",
+      "instance": "examples/approval-pending-notice.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/status",
+          "value": "approved"
+        }
+      ]
+    },
+    {
+      "name": "polling notice without a next check",
+      "schema": "schemas/approval-pending-notice.schema.json",
+      "instance": "examples/approval-pending-notice.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/next_check_at"
+        }
+      ]
+    },
+    {
+      "name": "pending notice with a later deadline than its request",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/delegated-envelope.json",
+      "expect": "semantic",
+      "expect_error": "misstates the request deadline",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/pending_notices/0/expires_at",
+          "value": "2026-04-28T18:14:23Z"
+        }
+      ]
+    },
+    {
+      "name": "pending notice addressed outside the delegation chain",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/delegated-envelope.json",
+      "expect": "semantic",
+      "expect_error": "is addressed outside the delegation chain",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/pending_notices/1/recipient_call_id",
+          "value": "call_2026-04-28_unrelated"
+        }
+      ]
     }
   ]
 }

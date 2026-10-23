@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from generate_examples import refresh_audit  # noqa: E402
-from validate_contracts import load, validate_envelope  # noqa: E402
+from validate_contracts import load, record_errors, validate_envelope  # noqa: E402
 
 
 class DelegatedRelayTests(unittest.TestCase):
@@ -50,6 +50,56 @@ class DelegatedRelayTests(unittest.TestCase):
     def test_relay_witness_without_a_relay(self) -> None:
         self.request.pop("relay")
         self.assertIn("audit approval.relayed witnesses disagree with the request relay", validate_envelope(self.envelope))
+
+
+class PendingNoticeTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.envelope = load("examples/delegated-envelope.json")
+        self.child, self.parent = self.envelope["pending_notices"]
+
+    def test_standalone_notice(self) -> None:
+        self.assertEqual(record_errors("approval-pending-notice", load("examples/approval-pending-notice.json")), [])
+
+    def test_poll_needs_a_next_check(self) -> None:
+        self.parent.pop("next_check_at")
+        self.assertTrue(record_errors("approval-pending-notice", self.parent))
+
+    def test_next_check_inside_the_pending_window(self) -> None:
+        self.parent["next_check_at"] = "2026-04-28T18:00:00Z"
+        self.assertIn("pending notice notice_2026-04-28_parent01 next_check_at is outside its pending window",
+                      record_errors("approval-pending-notice", self.parent))
+
+    def test_notice_names_this_request(self) -> None:
+        for field in ("request_id", "call_id", "action_hash"):
+            with self.subTest(field=field):
+                envelope = load("examples/delegated-envelope.json")
+                notice = envelope["pending_notices"][0]
+                notice[field] = "sha256:" + "0" * 64 if field == "action_hash" else "other_2026-04-28_0001"
+                self.assertIn(f"pending notice {notice['notice_id']} {field} does not match the request", validate_envelope(envelope))
+
+    def test_notice_goes_to_a_call_in_the_chain(self) -> None:
+        self.parent["recipient_call_id"] = "call_2026-04-28_unrelated"
+        self.assertIn("pending notice notice_2026-04-28_parent01 is addressed outside the delegation chain", validate_envelope(self.envelope))
+
+    def test_notice_keeps_the_request_deadline(self) -> None:
+        self.child["expires_at"] = "2026-04-28T18:14:23Z"
+        self.assertIn("pending notice notice_2026-04-28_child01 misstates the request deadline", validate_envelope(self.envelope))
+
+    def test_notice_only_while_pending(self) -> None:
+        self.child["issued_at"] = "2026-04-28T09:14:31Z"
+        self.assertIn("pending notice notice_2026-04-28_child01 was issued while the request was not pending", validate_envelope(self.envelope))
+
+    def test_notice_cites_a_pending_revision(self) -> None:
+        self.child["request_revision"] = self.envelope["request"]["revision"]
+        self.assertIn("pending notice notice_2026-04-28_child01 cites a revision after the request left pending", validate_envelope(self.envelope))
+
+    def test_notice_channels_were_used(self) -> None:
+        self.child["channels"] = ["slack"]
+        self.assertIn("pending notice notice_2026-04-28_child01 names a channel the request did not use", validate_envelope(self.envelope))
+
+    def test_notice_ids_are_unique(self) -> None:
+        self.parent["notice_id"] = self.child["notice_id"]
+        self.assertIn("pending notices reuse notice_id", validate_envelope(self.envelope))
 
 
 if __name__ == "__main__":

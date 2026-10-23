@@ -62,6 +62,7 @@ from the agent's point of view.
 | [`review-snapshot.schema.json`](schemas/review-snapshot.schema.json) | Exact decision material shown to the approver, bound by canonical hashes |
 | [`approval-policy.schema.json`](schemas/approval-policy.schema.json) | Immutable policy revision, material inputs, quorum, and channel requirements |
 | [`approval-request.schema.json`](schemas/approval-request.schema.json) | Durable pending identity, notifications, terminal state, and single-use consumption |
+| [`approval-pending-notice.schema.json`](schemas/approval-pending-notice.schema.json) | What the agent and its parent calls receive while a request waits on a human |
 | [`approval-record.schema.json`](schemas/approval-record.schema.json) | Human or policy decision, action and payload hashes, signatures, and settlement evidence |
 | [`resolution-record.schema.json`](schemas/resolution-record.schema.json) | Durable terminal receipt with independent delivery and acknowledgement state |
 | [`authority-snapshot.schema.json`](schemas/authority-snapshot.schema.json) | Dispatch-time authority status for approver, policy, workspace, and dispatcher |

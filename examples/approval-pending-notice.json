@@ -1,0 +1,20 @@
+{
+  "schema_version": "3.3.0",
+  "notice_id": "notice_2026-04-28_parent01",
+  "request_id": "req_2026-04-28_6a2d8800",
+  "proposal_id": "prop_2026-04-28_b3f1a2c4",
+  "call_id": "call_2026-04-28_7e19c5ad",
+  "tenant": "acme-corp",
+  "action_hash": "sha256:d60049e5d1dfd78abb7534723b54460afb754fb971029ffdaef7470abc2f3001",
+  "request_revision": 1,
+  "status": "pending",
+  "recipient_call_id": "call_2026-04-28_7e19a001",
+  "issued_at": "2026-04-28T09:14:26Z",
+  "expires_at": "2026-04-28T17:14:23Z",
+  "channels": [
+    "email"
+  ],
+  "resume": "poll_request",
+  "message": "Waiting for a support lead to approve this reply.",
+  "next_check_at": "2026-04-28T09:44:26Z"
+}

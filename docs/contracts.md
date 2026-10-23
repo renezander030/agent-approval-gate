@@ -309,6 +309,21 @@ first, each with its agent identity and `relayed_at`. The validator requires tha
 Approval text copied into a child conversation is not an approval. The child acts on
 the resolution for its own request.
 
+### Pending notices
+
+An `ApprovalPendingNotice` is what the gate returns while a human decides, in place of
+a tool result: the request and action it concerns, the request revision it observed,
+the call it was returned to, the request deadline, the channels the review went to, and
+how the caller learns the outcome (`await_resolution`, or `poll_request` no earlier than
+`next_check_at`). A parent can receive one for a delegated call, so a waiting child is
+visible up the chain instead of ending as a timeout.
+
+A notice grants nothing. In an envelope, `pending_notices` must name this request's
+identities and action hash, go to the proposing call or one of its ancestors, repeat the
+request deadline exactly, be issued while the request was pending at a revision before it
+left pending, and name only channels the request used. A standalone notice is checked
+with `--record approval-pending-notice FILE`.
+
 ## WebAuthn approval proof
 
 `webauthn-es256` is an optional signature profile for authenticated web approvals.

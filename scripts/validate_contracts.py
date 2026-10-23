@@ -825,6 +825,51 @@ def relay_errors(
     return errors
 
 
+def pending_notice_errors(notice: dict[str, Any]) -> list[str]:
+    """A pending notice points forward in time: it is issued before the deadline and asks for a check before it."""
+    errors: list[str] = []
+    label = f"pending notice {notice['notice_id']}"
+    issued_at, expires_at = parse_time(notice["issued_at"]), parse_time(notice["expires_at"])
+    if issued_at >= expires_at:
+        errors.append(f"{label} was issued at or after its deadline")
+    if "next_check_at" in notice and not issued_at < parse_time(notice["next_check_at"]) <= expires_at:
+        errors.append(f"{label} next_check_at is outside its pending window")
+    return errors
+
+
+def lifecycle_notice_errors(envelope: dict[str, Any]) -> list[str]:
+    """Every pending notice describes this request while it was pending, to a call in its delegation chain."""
+    errors: list[str] = []
+    proposal, request = envelope["proposal"], envelope["request"]
+    chain_calls = {hop["call_id"] for hop in proposal["delegation_chain"]}
+    used_channels = {item["channel"] for item in request["channels"]}
+    pending_until = parse_time(request.get("terminal_at", request["expires_at"]))
+    notice_ids: set[str] = set()
+    for notice in envelope.get("pending_notices", []):
+        label = f"pending notice {notice['notice_id']}"
+        if notice["notice_id"] in notice_ids:
+            errors.append("pending notices reuse notice_id")
+        notice_ids.add(notice["notice_id"])
+        errors.extend(pending_notice_errors(notice))
+        for field in ("request_id", "proposal_id", "call_id", "tenant", "action_hash"):
+            if notice[field] != request[field]:
+                errors.append(f"{label} {field} does not match the request")
+        if notice["recipient_call_id"] not in chain_calls:
+            errors.append(f"{label} is addressed outside the delegation chain")
+        if notice["expires_at"] != request["expires_at"]:
+            errors.append(f"{label} misstates the request deadline")
+        issued_at = parse_time(notice["issued_at"])
+        if not parse_time(request["requested_at"]) <= issued_at < pending_until:
+            errors.append(f"{label} was issued while the request was not pending")
+        if issued_at > parse_time(envelope["captured_at"]):
+            errors.append("envelope capture predates a contained record")
+        if notice["request_revision"] >= request["revision"]:
+            errors.append(f"{label} cites a revision after the request left pending")
+        if not set(notice.get("channels", [])) <= used_channels:
+            errors.append(f"{label} names a channel the request did not use")
+    return errors
+
+
 def audit_snapshot_errors(events: list[dict[str, Any]], snapshot: dict[str, Any]) -> list[str]:
     """Whether an AuditSnapshot manifest describes exactly this non-empty event range."""
     errors: list[str] = []
@@ -1086,6 +1131,7 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
     errors.extend(precondition_errors(proposal, review_snapshots, dispatches))
     errors.extend(standing_grant_errors(proposal, request, approvals))
     errors.extend(relay_errors(proposal, request, approvals, events))
+    errors.extend(lifecycle_notice_errors(envelope))
     if request["status"] in {"approved", "consumed"} and len(approved_records) < requirements["minimum_approvals"]:
         errors.append("approval quorum is not satisfied")
     if requirements["distinct_approvers"]:
@@ -1605,6 +1651,7 @@ RECORD_SELF_CHECKS = {
     "dispatch-record": execution_grant_errors,
     "approval-policy": policy_snapshot_errors,
     "approval-request": lambda record: policy_snapshot_errors(record["policy"]),
+    "approval-pending-notice": pending_notice_errors,
 }
 
 

@@ -316,6 +316,17 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     relay_event["actor"]["identifier"] = root["agent"]["identity"]
     index = next(i for i, e in enumerate(delegated["audit_events"]) if e["event_type"] == "approval.decided")
     delegated["audit_events"].insert(index, relay_event)
+    notice = {
+        "schema_version": delegated["schema_version"], "notice_id": "notice_2026-04-28_child01",
+        **{key: request[key] for key in ("request_id", "proposal_id", "call_id", "tenant", "action_hash")},
+        "request_revision": 1, "status": "pending", "recipient_call_id": proposal["call_id"],
+        "issued_at": "2026-04-28T09:14:25Z", "expires_at": request["expires_at"], "channels": ["email"],
+        "resume": "await_resolution", "message": "Waiting for a support lead to approve this reply.",
+    }
+    parent_notice = dict(notice, notice_id="notice_2026-04-28_parent01", recipient_call_id=root["call_id"],
+                         issued_at="2026-04-28T09:14:26Z", next_check_at="2026-04-28T09:44:26Z", resume="poll_request")
+    delegated["pending_notices"] = [notice, parent_notice]
+    write("approval-pending-notice.json", parent_notice)
     refresh_audit(delegated)
     write("delegated-envelope.json", delegated)
 
