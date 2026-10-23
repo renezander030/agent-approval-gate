@@ -254,5 +254,48 @@ class PolicyEvaluatorTests(unittest.TestCase):
         self.assertIn("external policy decision lacks its decision_id or response time", validate_envelope(envelope))
 
 
+class SupersessionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.envelope = load("examples/superseded-envelope.json")
+        self.successor = load("examples/approval-envelope.json")
+        self.request = self.envelope["request"]
+
+    def test_superseded_request_and_its_successor(self) -> None:
+        self.assertEqual(validate_envelope(self.envelope), [])
+        self.assertEqual(collection_errors([self.envelope, self.successor]), [])
+
+    def test_supersession_names_its_successor(self) -> None:
+        self.request.pop("superseded_by")
+        self.assertEqual(validate_envelope(self.envelope), ["envelope fails structural validation"])
+
+    def test_successor_is_another_request(self) -> None:
+        self.request["superseded_by"]["request_id"] = self.request["request_id"]
+        self.assertIn("superseded request names itself as its successor", validate_envelope(self.envelope))
+
+    def test_late_answer_to_a_superseded_request_is_refused(self) -> None:
+        approval = dict(load("examples/grant-issuing-envelope.json")["approvals"][0])
+        approval.pop("issued_grant")
+        approval["decided_at"] = approval["recorded_at"] = "2026-04-27T09:14:30Z"
+        self.envelope["approvals"] = [approval]
+        self.assertIn(f"approval {approval['approval_id']} answers a request that was superseded", validate_envelope(self.envelope))
+
+    def test_cancellation_witness_states_the_supersession(self) -> None:
+        for event in self.envelope["audit_events"]:
+            if event["event_type"] == "approval.cancelled":
+                event["detail"]["reason_code"] = "cancelled_by_requester"
+        refresh_audit(self.envelope)
+        self.assertIn("audit cancellation reason disagrees with the supersession", validate_envelope(self.envelope))
+
+    def test_successor_is_the_named_proposal(self) -> None:
+        self.request["superseded_by"]["proposal_id"] = "prop_2026-04-28_other0001"
+        self.assertIn(f"envelopes 0 and 1: request {self.request['request_id']} names a successor for another proposal or tenant",
+                      collection_errors([self.envelope, self.successor]))
+
+    def test_successor_comes_after(self) -> None:
+        self.successor["proposal"]["created_at"] = "2026-04-27T09:00:00Z"
+        self.assertIn(f"envelopes 0 and 1: request {self.request['request_id']} names a successor proposed before it",
+                      collection_errors([self.envelope, self.successor]))
+
+
 if __name__ == "__main__":
     unittest.main()

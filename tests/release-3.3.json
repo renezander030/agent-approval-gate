@@ -39,6 +39,12 @@
       "name": "policy outcome from an external decision point",
       "schema": "schemas/approval-policy.schema.json",
       "instance": "examples/approval-policy-external.json"
+    },
+    {
+      "name": "pending request superseded by a newer one",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/superseded-envelope.json",
+      "semantic": true
     }
   ],
   "negative": [
@@ -246,6 +252,32 @@
         {
           "op": "remove",
           "path": "/evaluator/protocol"
+        }
+      ]
+    },
+    {
+      "name": "superseded request without its successor",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/superseded-envelope.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/request/superseded_by"
+        }
+      ]
+    },
+    {
+      "name": "superseded request naming itself",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/superseded-envelope.json",
+      "expect": "semantic",
+      "expect_error": "names itself as its successor",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/superseded_by/request_id",
+          "value": "req_2026-04-27_6a2d8800"
         }
       ]
     }

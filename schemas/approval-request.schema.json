@@ -147,8 +147,19 @@
         "policy_failed",
         "delivery_failed",
         "consumed_for_dispatch",
-        "approval_revoked"
+        "approval_revoked",
+        "superseded"
       ]
+    },
+    "superseded_by": {
+      "description": "The newer request that replaced this pending one. A decision on a superseded request is refused; the reviewer acts on the successor.",
+      "type": "object",
+      "required": ["request_id", "proposal_id"],
+      "additionalProperties": false,
+      "properties": {
+        "request_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "proposal_id": {"$ref": "common.schema.json#/$defs/identifier"}
+      }
     },
     "revocation": {
       "description": "Withdrawal of an approved, unconsumed request. A conditional transition from approved to revoked must fail when the request was already consumed.",
@@ -174,6 +185,11 @@
     }
   },
   "allOf": [
+    {
+      "if": {"properties": {"terminal_reason": {"const": "superseded"}}, "required": ["terminal_reason"]},
+      "then": {"required": ["superseded_by"]},
+      "else": {"not": {"required": ["superseded_by"]}}
+    },
     {
       "if": {"properties": {"status": {"const": "pending"}}, "required": ["status"]},
       "then": {
@@ -235,7 +251,7 @@
       "if": {"properties": {"status": {"const": "cancelled"}}, "required": ["status"]},
       "then": {
         "required": ["terminal_at", "terminal_reason"],
-        "properties": {"terminal_reason": {"const": "cancelled_by_requester"}},
+        "properties": {"terminal_reason": {"enum": ["cancelled_by_requester", "superseded"]}},
         "not": {
           "anyOf": [
             {"required": ["decision_record_id"]},

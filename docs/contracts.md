@@ -369,6 +369,15 @@ returned and `responded_at`, no later than `evaluated_at`, so a denial or an aut
 approval can be traced to that engine's own log. An unavailable decision point carries
 no answer, and the evaluator-unavailable rules above decide the outcome.
 
+### Superseded requests
+
+When a newer proposal replaces a pending one, the old request ends `cancelled` with
+`terminal_reason: "superseded"` and `superseded_by` naming the successor's request and
+proposal, so a reviewer who opens the old prompt is sent to the new one. Its
+`approval.cancelled` event carries the same reason, and a decision made at or after the
+supersession is refused. Across a set of envelopes the successor must be the named
+proposal, for the same tenant, proposed no earlier than the request it replaces.
+
 ## WebAuthn approval proof
 
 `webauthn-es256` is an optional signature profile for authenticated web approvals.

@@ -884,6 +884,24 @@ def policy_refusal_errors(request: dict[str, Any]) -> list[str]:
     return errors
 
 
+def supersession_errors(request: dict[str, Any], approvals: list[dict[str, Any]], events: list[dict[str, Any]]) -> list[str]:
+    """A superseded request points at its successor, and nothing decides it after it was replaced."""
+    if request.get("terminal_reason") != "superseded":
+        return []
+    errors: list[str] = []
+    successor = request["superseded_by"]
+    if successor["request_id"] == request["request_id"] or successor["proposal_id"] == request["proposal_id"]:
+        errors.append("superseded request names itself as its successor")
+    superseded_at = parse_time(request["terminal_at"])
+    for approval in approvals:
+        if parse_time(approval["decided_at"]) >= superseded_at:
+            errors.append(f"approval {approval['approval_id']} answers a request that was superseded")
+    for event in events:
+        if event["event_type"] == "approval.cancelled" and event["detail"].get("reason_code", "superseded") != "superseded":
+            errors.append("audit cancellation reason disagrees with the supersession")
+    return errors
+
+
 def escalation_errors(request: dict[str, Any], events: list[dict[str, Any]]) -> list[str]:
     """Escalation notifies the actors the policy names after its delay, while the request is pending, and nothing more."""
     errors: list[str] = []
@@ -1225,6 +1243,7 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
     errors.extend(lifecycle_notice_errors(envelope))
     errors.extend(escalation_errors(request, events))
     errors.extend(policy_refusal_errors(request))
+    errors.extend(supersession_errors(request, approvals, events))
     if request["status"] in {"approved", "consumed"} and len(approved_records) < requirements["minimum_approvals"]:
         errors.append("approval quorum is not satisfied")
     if requirements["distinct_approvers"]:
@@ -1855,6 +1874,17 @@ def collection_errors(envelopes: list[dict[str, Any]]) -> list[str]:
         if key in idempotency and idempotency[key][1] != action_hash:
             errors.append(f"envelopes {idempotency[key][0]} and {index}: idempotency_key binds two different actions")
         idempotency.setdefault(key, (index, action_hash))
+    requests = {envelope["request"]["request_id"]: (index, envelope) for index, envelope in enumerate(envelopes)}
+    for index, envelope in enumerate(envelopes):
+        successor = envelope["request"].get("superseded_by")
+        if successor is None or successor["request_id"] not in requests:
+            continue
+        later, replacement = requests[successor["request_id"]]
+        prefix = f"envelopes {index} and {later}: request {envelope['request']['request_id']}"
+        if replacement["proposal"]["proposal_id"] != successor["proposal_id"] or replacement["proposal"]["tenant"] != envelope["proposal"]["tenant"]:
+            errors.append(f"{prefix} names a successor for another proposal or tenant")
+        elif parse_time(replacement["proposal"]["created_at"]) < parse_time(envelope["request"]["requested_at"]):
+            errors.append(f"{prefix} names a successor proposed before it")
     for index, grant in cited:
         origin = grant["origin"]
         if origin["approval_id"] not in approvals_by_id:

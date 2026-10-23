@@ -105,6 +105,17 @@ def rebind_action(envelope: dict[str, Any], action_type: str, payload: dict[str,
     return envelope
 
 
+def earlier_lifecycle(base: dict[str, Any]) -> dict[str, Any]:
+    """The reference lifecycle one day earlier, with its own identities, so it can sit beside the reference in one set."""
+    earlier = json.loads(json.dumps(base).replace("2026-04-28T", "2026-04-27T").replace("_2026-04-28_", "_2026-04-27_"))
+    earlier["proposal"]["idempotency_key"] = earlier["dispatches"][0]["idempotency_key"] = "idem_2026-04-27_reply-ticket-48213"
+    earlier = rebind_action(earlier, earlier["proposal"]["action_type"], earlier["proposal"]["payload"])
+    for event in earlier["audit_events"]:
+        event["stream_id"] = "stream_prop_27f1a2c4"
+    earlier["audit_snapshot"]["stream_id"] = "stream_prop_27f1a2c4"
+    return earlier
+
+
 def lifecycle_examples(base: dict[str, Any]) -> None:
     edited = deepcopy(base)
     approval = edited["approvals"][0]
@@ -366,12 +377,7 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     refresh_audit(denied)
     write("policy-denied-envelope.json", denied)
 
-    issuing = json.loads(json.dumps(base).replace("2026-04-28T", "2026-04-27T").replace("_2026-04-28_", "_2026-04-27_"))
-    issuing["proposal"]["idempotency_key"] = issuing["dispatches"][0]["idempotency_key"] = "idem_2026-04-27_reply-ticket-48213"
-    issuing = rebind_action(issuing, issuing["proposal"]["action_type"], issuing["proposal"]["payload"])
-    for event in issuing["audit_events"]:
-        event["stream_id"] = "stream_prop_27f1a2c4"
-    issuing["audit_snapshot"]["stream_id"] = "stream_prop_27f1a2c4"
+    issuing = earlier_lifecycle(base)
     approval = issuing["approvals"][0]
     approval["issued_grant"] = {
         "grant_id": "grant_2026-04-27_support-replies-week", "granted_at": approval["decided_at"], "expires_at": "2026-05-04T09:14:30Z",
@@ -391,6 +397,25 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     cited["resolutions"][0]["approval_record_hash"] = digest_value(cited["approvals"][0])
     refresh_audit(cited)
     write("grant-origin-envelope.json", cited)
+
+    superseded = earlier_lifecycle(base)
+    request = superseded["request"]
+    replaced_at = "2026-04-27T09:14:29Z"
+    request.update(status="cancelled", revision=2, terminal_at=replaced_at, terminal_reason="superseded",
+                   superseded_by={"request_id": base["request"]["request_id"], "proposal_id": base["proposal"]["proposal_id"]})
+    for key in ("consumed_at", "dispatch_id", "decision_record_id"):
+        request.pop(key)
+    for key in ("approvals", "resolutions", "authority_snapshots", "dispatches"):
+        superseded[key] = []
+    cancel_event = deepcopy(superseded["audit_events"][2])
+    cancel_event.update(event_id="event_superseded_01", event_type="approval.cancelled", occurred_at=replaced_at, recorded_at=replaced_at,
+                        references={"request_id": request["request_id"]}, detail={"reason_code": "superseded"})
+    snapshot_event = deepcopy(superseded["audit_events"][-1])
+    snapshot_event.update(occurred_at=replaced_at, recorded_at=replaced_at)
+    superseded["audit_events"] = superseded["audit_events"][:4] + [cancel_event, snapshot_event]
+    superseded["captured_at"] = superseded["audit_snapshot"]["captured_at"] = replaced_at
+    refresh_audit(superseded)
+    write("superseded-envelope.json", superseded)
 
 
 def main() -> None:
