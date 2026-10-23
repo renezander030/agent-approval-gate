@@ -82,6 +82,7 @@
         "legal_hold": {"type": "boolean"}
       }
     },
+    "trace_context": {"$ref": "common.schema.json#/$defs/trace_context"},
     "references": {
       "type": "object",
       "additionalProperties": false,

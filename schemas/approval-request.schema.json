@@ -132,6 +132,7 @@
         "next_step": {"type": "string", "enum": ["revise_and_resubmit", "contact_policy_owner", "do_not_retry"]}
       }
     },
+    "trace_context": {"$ref": "common.schema.json#/$defs/trace_context"},
     "terminal_at": {"type": "string", "format": "date-time"},
     "decision_record_id": {"$ref": "common.schema.json#/$defs/identifier"},
     "consumed_at": {"type": "string", "format": "date-time"},

@@ -45,6 +45,12 @@
       "schema": "schemas/approval-envelope.schema.json",
       "instance": "examples/superseded-envelope.json",
       "semantic": true
+    },
+    {
+      "name": "lifecycle joined to its agent run trace",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/traced-envelope.json",
+      "semantic": true
     }
   ],
   "negative": [
@@ -278,6 +284,33 @@
           "op": "replace",
           "path": "/request/superseded_by/request_id",
           "value": "req_2026-04-27_6a2d8800"
+        }
+      ]
+    },
+    {
+      "name": "traceparent that is not W3C trace context",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/traced-envelope.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/trace_context/traceparent",
+          "value": "trace-4bf92f35"
+        }
+      ]
+    },
+    {
+      "name": "request trace with an all-zero trace ID",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/traced-envelope.json",
+      "expect": "semantic",
+      "expect_error": "invalid trace ID",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/trace_context/traceparent",
+          "value": "00-00000000000000000000000000000000-00f067aa0ba902b7-01"
         }
       ]
     }

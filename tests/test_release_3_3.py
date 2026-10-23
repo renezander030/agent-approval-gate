@@ -297,5 +297,32 @@ class SupersessionTests(unittest.TestCase):
                       collection_errors([self.envelope, self.successor]))
 
 
+class TraceContextTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.envelope = load("examples/traced-envelope.json")
+
+    def test_traced_lifecycle(self) -> None:
+        self.assertEqual(validate_envelope(self.envelope), [])
+
+    def test_events_stay_on_the_request_trace(self) -> None:
+        event = self.envelope["audit_events"][4]
+        event["trace_context"]["traceparent"] = "00-" + "1" * 32 + "-00f067aa0ba902b7-01"
+        refresh_audit(self.envelope)
+        self.assertIn(f"audit event {event['event_id']} belongs to another trace", validate_envelope(self.envelope))
+
+    def test_event_trace_needs_a_request_trace(self) -> None:
+        self.envelope["request"].pop("trace_context")
+        self.assertIn(f"audit event {self.envelope['audit_events'][0]['event_id']} carries a trace context the request does not",
+                      validate_envelope(self.envelope))
+
+    def test_all_zero_trace_id_is_invalid(self) -> None:
+        self.envelope["request"]["trace_context"]["traceparent"] = "00-" + "0" * 32 + "-00f067aa0ba902b7-01"
+        self.assertIn("request trace context has an invalid trace ID", validate_envelope(self.envelope))
+
+    def test_traceparent_shape(self) -> None:
+        self.envelope["request"]["trace_context"]["traceparent"] = "4bf92f3577b34da6a3ce929d0e0e4736"
+        self.assertEqual(validate_envelope(self.envelope), ["envelope fails structural validation"])
+
+
 if __name__ == "__main__":
     unittest.main()

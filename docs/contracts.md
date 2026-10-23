@@ -378,6 +378,15 @@ proposal, so a reviewer who opens the old prompt is sent to the new one. Its
 supersession is refused. Across a set of envelopes the successor must be the named
 proposal, for the same tenant, proposed no earlier than the request it replaces.
 
+### Trace context
+
+`ApprovalRequest.trace_context` and each audit event's `trace_context` carry a W3C
+`traceparent` (and optional `tracestate`) for the agent run, so approval records can be
+joined to the run's distributed trace. Every audit event that carries one must share the
+request's trace ID, and an all-zero trace ID is invalid. Trace context is correlation
+data: it sits outside the hashed action, so the same action keeps its hash when it is
+re-proposed from another run, and it never stands in for authority.
+
 ## WebAuthn approval proof
 
 `webauthn-es256` is an optional signature profile for authenticated web approvals.

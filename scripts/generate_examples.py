@@ -417,6 +417,14 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     refresh_audit(superseded)
     write("superseded-envelope.json", superseded)
 
+    traced = deepcopy(base)
+    trace = "4bf92f3577b34da6a3ce929d0e0e4736"
+    traced["request"]["trace_context"] = {"traceparent": f"00-{trace}-00f067aa0ba902b7-01", "tracestate": "acme=support-triage"}
+    for index, event in enumerate(traced["audit_events"], 1):
+        event["trace_context"] = {"traceparent": f"00-{trace}-{index:016x}-01"}
+    refresh_audit(traced)
+    write("traced-envelope.json", traced)
+
 
 def main() -> None:
     proposal = load("email-reply-approval.json")

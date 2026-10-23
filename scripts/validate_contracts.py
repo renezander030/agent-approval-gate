@@ -902,6 +902,26 @@ def supersession_errors(request: dict[str, Any], approvals: list[dict[str, Any]]
     return errors
 
 
+def trace_id(context: dict[str, Any]) -> str:
+    return context["traceparent"].split("-")[1]
+
+
+def trace_context_errors(request: dict[str, Any], events: list[dict[str, Any]]) -> list[str]:
+    """Trace context correlates one lifecycle with one agent run; it never mixes traces."""
+    errors: list[str] = []
+    expected = trace_id(request["trace_context"]) if "trace_context" in request else None
+    if expected is not None and set(expected) == {"0"}:
+        errors.append("request trace context has an invalid trace ID")
+    for event in events:
+        if "trace_context" not in event:
+            continue
+        if expected is None:
+            errors.append(f"audit event {event['event_id']} carries a trace context the request does not")
+        elif trace_id(event["trace_context"]) != expected:
+            errors.append(f"audit event {event['event_id']} belongs to another trace")
+    return errors
+
+
 def escalation_errors(request: dict[str, Any], events: list[dict[str, Any]]) -> list[str]:
     """Escalation notifies the actors the policy names after its delay, while the request is pending, and nothing more."""
     errors: list[str] = []
@@ -1244,6 +1264,7 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
     errors.extend(escalation_errors(request, events))
     errors.extend(policy_refusal_errors(request))
     errors.extend(supersession_errors(request, approvals, events))
+    errors.extend(trace_context_errors(request, events))
     if request["status"] in {"approved", "consumed"} and len(approved_records) < requirements["minimum_approvals"]:
         errors.append("approval quorum is not satisfied")
     if requirements["distinct_approvers"]:

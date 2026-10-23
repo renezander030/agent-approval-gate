@@ -250,6 +250,16 @@
         "expected": {"$ref": "#/$defs/safe_text", "maxLength": 256}
       }
     },
+    "trace_context": {
+      "description": "W3C Trace Context of the agent run, so approval records join its distributed trace. It is correlation data, not evidence of authority.",
+      "type": "object",
+      "required": ["traceparent"],
+      "additionalProperties": false,
+      "properties": {
+        "traceparent": {"type": "string", "pattern": "^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$"},
+        "tracestate": {"type": "string", "maxLength": 512, "pattern": "^[\\x20-\\x7E]*$"}
+      }
+    },
     "evidence_reference": {
       "type": "object",
       "required": ["kind", "uri", "digest"],
