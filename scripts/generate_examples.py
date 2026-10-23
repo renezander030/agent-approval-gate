@@ -297,6 +297,28 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     refresh_audit(granted)
     write("granted-envelope.json", granted)
 
+    delegated = deepcopy(base)
+    proposal = delegated["proposal"]
+    child = proposal["delegation_chain"][0]
+    root = {
+        "agent": {"identity": "agent.support-orchestrator.prod", "name": "support-orchestrator", "version": "2.1.0", "run_id": "run_2026-04-28_5f9e1a00"},
+        "call_id": "call_2026-04-28_7e19a001", "delegated_at": "2026-04-28T09:14:21Z",
+    }
+    child["parent_call_id"] = proposal["parent_call_id"] = root["call_id"]
+    proposal["delegation_chain"].insert(0, root)
+    delegated = rebind_action(delegated, proposal["action_type"], proposal["payload"])
+    request = delegated["request"]
+    request["parent_call_id"] = root["call_id"]
+    request["relay"] = [{"call_id": root["call_id"], "agent_identity": root["agent"]["identity"], "relayed_at": "2026-04-28T09:14:27Z"}]
+    relay_event = deepcopy(next(e for e in delegated["audit_events"] if e["event_type"] == "approval.requested"))
+    relay_event.update(event_id="event_relayed_01", event_type="approval.relayed", occurred_at="2026-04-28T09:14:27Z", recorded_at="2026-04-28T09:14:27Z",
+                       references={"request_id": request["request_id"]}, detail={"metadata": {"call_id": root["call_id"]}})
+    relay_event["actor"]["identifier"] = root["agent"]["identity"]
+    index = next(i for i, e in enumerate(delegated["audit_events"]) if e["event_type"] == "approval.decided")
+    delegated["audit_events"].insert(index, relay_event)
+    refresh_audit(delegated)
+    write("delegated-envelope.json", delegated)
+
 
 def main() -> None:
     proposal = load("email-reply-approval.json")

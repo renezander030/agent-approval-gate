@@ -786,6 +786,45 @@ def revocation_errors(
     return errors
 
 
+def relay_errors(
+    proposal: dict[str, Any], request: dict[str, Any], approvals: list[dict[str, Any]], events: list[dict[str, Any]]
+) -> list[str]:
+    """A review climbs the delegation chain through ancestor calls; the relaying agents never decide."""
+    errors: list[str] = []
+    relay = request.get("relay", [])
+    ancestors = {hop["call_id"]: (index, hop["agent"]["identity"]) for index, hop in enumerate(proposal["delegation_chain"][:-1])}
+    previous_index: int | None = None
+    previous_at: datetime | None = None
+    for hop in relay:
+        label = f"relay hop {hop['call_id']}"
+        if hop["call_id"] not in ancestors:
+            errors.append(f"{label} is not an ancestor of the proposing call")
+        else:
+            index, identity = ancestors[hop["call_id"]]
+            if hop["agent_identity"] != identity:
+                errors.append(f"{label} names another agent than its delegation hop")
+            if previous_index is not None and index >= previous_index:
+                errors.append("relay hops do not climb the delegation chain nearest first")
+            previous_index = index
+        relayed_at = parse_time(hop["relayed_at"])
+        if not parse_time(request["requested_at"]) <= relayed_at < parse_time(request["expires_at"]):
+            errors.append(f"{label} was relayed outside the request window")
+        if previous_at is not None and relayed_at < previous_at:
+            errors.append("relay times are not monotonic")
+        previous_at = relayed_at
+    relaying_agents = {hop["agent_identity"] for hop in relay}
+    for approval in approvals:
+        if approval["decided_by"]["identifier"] in relaying_agents:
+            errors.append(f"approval {approval['approval_id']} was decided by a relaying agent")
+    witnesses = [event for event in events if event["event_type"] == "approval.relayed"]
+    expected = {(hop["call_id"], parse_time(hop["relayed_at"]), hop["agent_identity"]) for hop in relay}
+    observed = {(event["detail"].get("metadata", {}).get("call_id"), parse_time(event["occurred_at"]), event["actor"]["identifier"])
+                for event in witnesses if event["references"].get("request_id") == request["request_id"]}
+    if len(witnesses) != len(relay) or observed != expected:
+        errors.append("audit approval.relayed witnesses disagree with the request relay")
+    return errors
+
+
 def audit_snapshot_errors(events: list[dict[str, Any]], snapshot: dict[str, Any]) -> list[str]:
     """Whether an AuditSnapshot manifest describes exactly this non-empty event range."""
     errors: list[str] = []
@@ -1046,6 +1085,7 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
     errors.extend(effect_errors(proposal, review_snapshots, request, approvals))
     errors.extend(precondition_errors(proposal, review_snapshots, dispatches))
     errors.extend(standing_grant_errors(proposal, request, approvals))
+    errors.extend(relay_errors(proposal, request, approvals, events))
     if request["status"] in {"approved", "consumed"} and len(approved_records) < requirements["minimum_approvals"]:
         errors.append("approval quorum is not satisfied")
     if requirements["distinct_approvers"]:
@@ -1489,7 +1529,7 @@ def validate_repository() -> list[str]:
         if "/main/" in identifier:
             failures.append(f"{path}: $id points at mutable main")
 
-    for corpus_path in ("tests/conformance.json", "tests/adversarial.json", "tests/hardening.json", "tests/release-3.1.json", "tests/release-3.2.json"):
+    for corpus_path in ("tests/conformance.json", "tests/adversarial.json", "tests/hardening.json", "tests/release-3.1.json", "tests/release-3.2.json", "tests/release-3.3.json"):
         corpus = load(corpus_path)
         for vector in corpus["positive"]:
             validator = validator_for(vector["schema"], schemas, registry)

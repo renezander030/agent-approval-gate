@@ -1,0 +1,36 @@
+{
+  "positive": [
+    {
+      "name": "review relayed through the parent call",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/delegated-envelope.json",
+      "semantic": true
+    }
+  ],
+  "negative": [
+    {
+      "name": "relay through the proposing call itself",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/delegated-envelope.json",
+      "expect": "semantic",
+      "expect_error": "is not an ancestor of the proposing call",
+      "operations": [{"op": "replace", "path": "/request/relay/0/call_id", "value": "call_2026-04-28_7e19c5ad"}]
+    },
+    {
+      "name": "relaying agent decides the request",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/delegated-envelope.json",
+      "expect": "semantic",
+      "expect_error": "was decided by a relaying agent",
+      "operations": [{"op": "replace", "path": "/approvals/0/decided_by/identifier", "value": "agent.support-orchestrator.prod"}]
+    },
+    {
+      "name": "relay hop without a request relay",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/delegated-envelope.json",
+      "expect": "semantic",
+      "expect_error": "approval.relayed witnesses disagree",
+      "operations": [{"op": "remove", "path": "/request/relay"}]
+    }
+  ]
+}

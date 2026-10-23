@@ -290,6 +290,25 @@ that channel.
 See [framework-mapping.md](framework-mapping.md) for where these records come from in
 common agent frameworks.
 
+## Version 3.3 additions
+
+### Relayed reviews in delegated work
+
+A delegated call often reaches its human through the parent conversation. The
+request records that path in `relay`: the ancestor calls that carried the review, nearest
+first, each with its agent identity and `relayed_at`. The validator requires that:
+
+- every relay hop is an ancestor of the proposing call in the proposal's delegation
+  chain and names that hop's agent;
+- the hops climb the chain one call at a time, inside the request window, in time order;
+- no relaying agent decides the request: a relay forwards the review, and the decision
+  binds the delegated call's exact action hash like any other;
+- each hop has one `approval.relayed` audit event with the hop's agent as actor, its
+  `call_id` in `detail.metadata`, and the relay time.
+
+Approval text copied into a child conversation is not an approval. The child acts on
+the resolution for its own request.
+
 ## WebAuthn approval proof
 
 `webauthn-es256` is an optional signature profile for authenticated web approvals.
