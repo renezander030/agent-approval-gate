@@ -330,6 +330,18 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     refresh_audit(delegated)
     write("delegated-envelope.json", delegated)
 
+    escalated = deepcopy(base)
+    request = escalated["request"]
+    request["policy"]["requirements"]["escalation"] = {"after_seconds": 2, "notify_actor_ids": ["support-lead-oncall@acme-corp.example"]}
+    request["escalations"] = [{"escalated_at": "2026-04-28T09:14:28Z", "notified_actor_ids": ["support-lead-oncall@acme-corp.example"], "channel": "email"}]
+    escalation_event = deepcopy(next(e for e in escalated["audit_events"] if e["event_type"] == "approval.requested"))
+    escalation_event.update(event_id="event_escalated_01", event_type="approval.escalated", occurred_at="2026-04-28T09:14:28Z", recorded_at="2026-04-28T09:14:28Z",
+                            references={"request_id": request["request_id"]}, detail={"channel": "email", "reason_code": "no_decision_yet"})
+    index = next(i for i, e in enumerate(escalated["audit_events"]) if e["event_type"] == "approval.decided")
+    escalated["audit_events"].insert(index, escalation_event)
+    refresh_audit(escalated)
+    write("escalated-envelope.json", escalated)
+
 
 def main() -> None:
     proposal = load("email-reply-approval.json")

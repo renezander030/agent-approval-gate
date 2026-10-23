@@ -11,7 +11,7 @@ import json
 import math
 import re
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -825,6 +825,37 @@ def relay_errors(
     return errors
 
 
+def escalation_errors(request: dict[str, Any], events: list[dict[str, Any]]) -> list[str]:
+    """Escalation notifies the actors the policy names after its delay, while the request is pending, and nothing more."""
+    errors: list[str] = []
+    escalations = request.get("escalations", [])
+    policy = request["policy"]["requirements"].get("escalation")
+    if escalations and policy is None:
+        return ["request escalated without a policy escalation"]
+    earliest = parse_time(request["requested_at"]) + timedelta(seconds=policy["after_seconds"]) if policy else None
+    pending_until = parse_time(request.get("terminal_at", request["expires_at"]))
+    previous: datetime | None = None
+    for item in escalations:
+        escalated_at = parse_time(item["escalated_at"])
+        label = f"escalation at {item['escalated_at']}"
+        if earliest and escalated_at < earliest:
+            errors.append(f"{label} came before the policy's escalation delay")
+        if escalated_at >= pending_until:
+            errors.append(f"{label} happened after the request left pending")
+        if previous is not None and escalated_at < previous:
+            errors.append("escalation times are not monotonic")
+        previous = escalated_at
+        if not set(item["notified_actor_ids"]) <= set(policy["notify_actor_ids"]):
+            errors.append(f"{label} notified an actor the policy does not name")
+    witnesses = [event for event in events if event["event_type"] == "approval.escalated"]
+    expected = sorted((parse_time(item["escalated_at"]), item["channel"]) for item in escalations)
+    observed = sorted((parse_time(event["occurred_at"]), event["detail"].get("channel")) for event in witnesses
+                      if event["references"].get("request_id") == request["request_id"])
+    if len(witnesses) != len(escalations) or observed != expected:
+        errors.append("audit approval.escalated witnesses disagree with the request escalations")
+    return errors
+
+
 def pending_notice_errors(notice: dict[str, Any]) -> list[str]:
     """A pending notice points forward in time: it is issued before the deadline and asks for a check before it."""
     errors: list[str] = []
@@ -1132,6 +1163,7 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
     errors.extend(standing_grant_errors(proposal, request, approvals))
     errors.extend(relay_errors(proposal, request, approvals, events))
     errors.extend(lifecycle_notice_errors(envelope))
+    errors.extend(escalation_errors(request, events))
     if request["status"] in {"approved", "consumed"} and len(approved_records) < requirements["minimum_approvals"]:
         errors.append("approval quorum is not satisfied")
     if requirements["distinct_approvers"]:

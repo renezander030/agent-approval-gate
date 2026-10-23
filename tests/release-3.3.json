@@ -10,6 +10,12 @@
       "name": "pending notice returned to the parent call",
       "schema": "schemas/approval-pending-notice.schema.json",
       "instance": "examples/approval-pending-notice.json"
+    },
+    {
+      "name": "escalated pending request",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/escalated-envelope.json",
+      "semantic": true
     }
   ],
   "negative": [
@@ -104,6 +110,47 @@
           "op": "replace",
           "path": "/pending_notices/1/recipient_call_id",
           "value": "call_2026-04-28_unrelated"
+        }
+      ]
+    },
+    {
+      "name": "escalation before the policy delay",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/escalated-envelope.json",
+      "expect": "semantic",
+      "expect_error": "came before the policy's escalation delay",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/policy/requirements/escalation/after_seconds",
+          "value": 600
+        }
+      ]
+    },
+    {
+      "name": "escalation to an actor the policy does not name",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/escalated-envelope.json",
+      "expect": "semantic",
+      "expect_error": "notified an actor the policy does not name",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/escalations/0/notified_actor_ids/0",
+          "value": "someone-else@acme-corp.example"
+        }
+      ]
+    },
+    {
+      "name": "escalation to the policy channel",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/escalated-envelope.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/escalations/0/channel",
+          "value": "policy"
         }
       ]
     }

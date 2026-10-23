@@ -87,6 +87,31 @@
         }
       }
     },
+    "escalations": {
+      "description": "Notices sent under the policy's escalation while the request was pending, in time order.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "required": ["escalated_at", "notified_actor_ids", "channel"],
+        "additionalProperties": false,
+        "properties": {
+          "escalated_at": {"type": "string", "format": "date-time"},
+          "notified_actor_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 128}
+          },
+          "channel": {
+            "type": "string",
+            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli"]
+          }
+        }
+      }
+    },
     "terminal_at": {"type": "string", "format": "date-time"},
     "decision_record_id": {"$ref": "common.schema.json#/$defs/identifier"},
     "consumed_at": {"type": "string", "format": "date-time"},

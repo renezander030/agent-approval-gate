@@ -50,6 +50,7 @@
         "approval.cancelled",
         "approval.revoked",
         "approval.relayed",
+        "approval.escalated",
         "resolution.emitted",
         "resolution.acknowledged",
         "authority.checked",

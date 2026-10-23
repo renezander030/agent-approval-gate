@@ -324,6 +324,17 @@ request deadline exactly, be issued while the request was pending at a revision 
 left pending, and name only channels the request used. A standalone notice is checked
 with `--record approval-pending-notice FILE`.
 
+### Escalation without new authority
+
+`requirements.escalation` names who is told when a request is still pending after
+`after_seconds`. The request lists each notice in `escalations` with its time, the
+notified actors, and the channel, and each has one `approval.escalated` audit event at
+the same time on the same channel. An escalation must come no earlier than the policy's
+delay, while the request is pending, and only to actors the policy names.
+
+Escalation only notifies. It does not extend the request deadline, and a notified actor
+decides only if separation of duties already makes them eligible.
+
 ## WebAuthn approval proof
 
 `webauthn-es256` is an optional signature profile for authenticated web approvals.

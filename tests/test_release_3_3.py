@@ -102,5 +102,42 @@ class PendingNoticeTests(unittest.TestCase):
         self.assertIn("pending notices reuse notice_id", validate_envelope(self.envelope))
 
 
+class EscalationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.envelope = load("examples/escalated-envelope.json")
+        self.request = self.envelope["request"]
+        self.escalation = self.request["escalations"][0]
+
+    def test_escalated_lifecycle(self) -> None:
+        self.assertEqual(validate_envelope(self.envelope), [])
+
+    def test_escalation_needs_a_policy(self) -> None:
+        self.request["policy"]["requirements"].pop("escalation")
+        self.assertIn("request escalated without a policy escalation", validate_envelope(self.envelope))
+
+    def test_escalation_waits_for_the_policy_delay(self) -> None:
+        self.request["policy"]["requirements"]["escalation"]["after_seconds"] = 600
+        self.assertIn("escalation at 2026-04-28T09:14:28Z came before the policy's escalation delay", validate_envelope(self.envelope))
+
+    def test_escalation_only_while_pending(self) -> None:
+        self.request["policy"]["requirements"]["escalation"]["after_seconds"] = 1
+        self.escalation["escalated_at"] = "2026-04-28T09:14:31Z"
+        self.assertIn("escalation at 2026-04-28T09:14:31Z happened after the request left pending", validate_envelope(self.envelope))
+
+    def test_escalation_notifies_only_named_actors(self) -> None:
+        self.escalation["notified_actor_ids"] = ["someone-else@acme-corp.example"]
+        self.assertIn("escalation at 2026-04-28T09:14:28Z notified an actor the policy does not name", validate_envelope(self.envelope))
+
+    def test_notified_actor_gains_no_decision_rights(self) -> None:
+        approval = self.envelope["approvals"][0]
+        approval["decided_by"]["identifier"] = "support-lead-oncall@acme-corp.example"
+        self.assertIn("approval actor support-lead-oncall@acme-corp.example is not eligible under policy", validate_envelope(self.envelope))
+
+    def test_every_escalation_has_its_audit_witness(self) -> None:
+        self.envelope["audit_events"] = [e for e in self.envelope["audit_events"] if e["event_type"] != "approval.escalated"]
+        refresh_audit(self.envelope)
+        self.assertIn("audit approval.escalated witnesses disagree with the request escalations", validate_envelope(self.envelope))
+
+
 if __name__ == "__main__":
     unittest.main()
