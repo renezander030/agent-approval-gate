@@ -335,6 +335,18 @@ delay, while the request is pending, and only to actors the policy names.
 Escalation only notifies. It does not extend the request deadline, and a notified actor
 decides only if separation of duties already makes them eligible.
 
+### Traceable policy refusals
+
+When the policy denies a request, `ApprovalRequest.policy_refusal` tells the proposing
+agent and its user why and where to go: the `evaluation_id` of the snapshot that
+decided, a `reason_code`, the denying `rule_ids`, a redacted `message`, the
+`policy_owner`, and a `next_step` (`revise_and_resubmit`, `contact_policy_owner`, or
+`do_not_retry`). The validator accepts it only on a `deny` outcome, for the same
+evaluation, with rule IDs that matched with a `deny` effect, and with a reason that
+agrees with the snapshot: `denied_by_rule` needs those rules, `no_matching_rule` an
+empty `matched_rules`, and `evaluator_unavailable` an unavailable evaluator. A refusal
+never reopens the request; a revised action is a new proposal.
+
 ## WebAuthn approval proof
 
 `webauthn-es256` is an optional signature profile for authenticated web approvals.

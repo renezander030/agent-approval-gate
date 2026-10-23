@@ -16,6 +16,12 @@
       "schema": "schemas/approval-envelope.schema.json",
       "instance": "examples/escalated-envelope.json",
       "semantic": true
+    },
+    {
+      "name": "policy denial that names its rule and owner",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/policy-denied-envelope.json",
+      "semantic": true
     }
   ],
   "negative": [
@@ -151,6 +157,32 @@
           "op": "replace",
           "path": "/request/escalations/0/channel",
           "value": "policy"
+        }
+      ]
+    },
+    {
+      "name": "policy refusal naming a rule that asked rather than denied",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/policy-denied-envelope.json",
+      "expect": "semantic",
+      "expect_error": "that did not deny",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/policy_refusal/rule_ids/0",
+          "value": "rule.email.external-recipient"
+        }
+      ]
+    },
+    {
+      "name": "policy refusal without an owner",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/policy-denied-envelope.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/request/policy_refusal/policy_owner"
         }
       ]
     }

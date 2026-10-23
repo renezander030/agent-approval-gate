@@ -342,6 +342,30 @@ def lifecycle_examples(base: dict[str, Any]) -> None:
     refresh_audit(escalated)
     write("escalated-envelope.json", escalated)
 
+    denied = deepcopy(base)
+    request = denied["request"]
+    policy = request["policy"]
+    policy.update(outcome="deny", matched_rules=[
+        {"rule_id": "rule.email.external-recipient", "effect": "require_approval"},
+        {"rule_id": "rule.email.legal-hold-account", "effect": "deny"},
+    ], outcome_reason="The recipient account is under a legal hold.")
+    request.update(status="failed", revision=2, terminal_at=request["requested_at"], terminal_reason="policy_failed")
+    for key in ("consumed_at", "dispatch_id", "decision_record_id"):
+        request.pop(key)
+    request["policy_refusal"] = {
+        "evaluation_id": policy["evaluation_id"], "reason_code": "denied_by_rule", "rule_ids": ["rule.email.legal-hold-account"],
+        "message": "Replies to accounts under a legal hold go through the legal team, not the support queue.",
+        "policy_owner": "legal-ops@acme-corp.example", "next_step": "contact_policy_owner",
+    }
+    for key in ("approvals", "resolutions", "authority_snapshots", "dispatches"):
+        denied[key] = []
+    snapshot_event = deepcopy(denied["audit_events"][-1])
+    snapshot_event.update(occurred_at="2026-04-28T09:14:27Z", recorded_at="2026-04-28T09:14:27Z")
+    denied["audit_events"] = denied["audit_events"][:4] + [snapshot_event]
+    denied["captured_at"] = denied["audit_snapshot"]["captured_at"] = "2026-04-28T09:14:27Z"
+    refresh_audit(denied)
+    write("policy-denied-envelope.json", denied)
+
 
 def main() -> None:
     proposal = load("email-reply-approval.json")

@@ -139,5 +139,43 @@ class EscalationTests(unittest.TestCase):
         self.assertIn("audit approval.escalated witnesses disagree with the request escalations", validate_envelope(self.envelope))
 
 
+class PolicyRefusalTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.envelope = load("examples/policy-denied-envelope.json")
+        self.request = self.envelope["request"]
+        self.refusal = self.request["policy_refusal"]
+
+    def test_denied_lifecycle_names_its_rule(self) -> None:
+        self.assertEqual(validate_envelope(self.envelope), [])
+
+    def test_standalone_request_checks_its_refusal(self) -> None:
+        self.refusal["rule_ids"] = ["rule.email.external-recipient"]
+        self.assertIn("policy refusal names rule rule.email.external-recipient that did not deny",
+                      record_errors("approval-request", self.request))
+
+    def test_refusal_only_for_a_denied_request(self) -> None:
+        envelope = load("examples/approval-envelope.json")
+        envelope["request"]["policy_refusal"] = self.refusal
+        self.assertIn("policy refusal on a request the policy did not deny", validate_envelope(envelope))
+
+    def test_refusal_cites_this_evaluation(self) -> None:
+        self.refusal["evaluation_id"] = "eval_2026-04-28_other0001"
+        self.assertIn("policy refusal cites another policy evaluation", validate_envelope(self.envelope))
+
+    def test_refusal_reason_follows_the_snapshot(self) -> None:
+        self.refusal["reason_code"] = "no_matching_rule"
+        self.assertIn("policy refusal reason disagrees with the policy snapshot", validate_envelope(self.envelope))
+
+    def test_unavailable_evaluator_is_reported_as_such(self) -> None:
+        policy = self.request["policy"]
+        policy.update(evaluation_status="evaluator_unavailable")
+        policy.pop("matched_rules")
+        self.refusal.pop("rule_ids")
+        self.refusal["reason_code"] = "evaluator_unavailable"
+        self.assertEqual(validate_envelope(self.envelope), [])
+        self.refusal["reason_code"] = "no_matching_rule"
+        self.assertIn("policy refusal reason disagrees with the policy snapshot", validate_envelope(self.envelope))
+
+
 if __name__ == "__main__":
     unittest.main()

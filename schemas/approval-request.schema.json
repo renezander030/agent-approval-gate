@@ -112,6 +112,26 @@
         }
       }
     },
+    "policy_refusal": {
+      "description": "What the proposing agent and its user are told when the policy denies the request: the evaluation and rules that decided, who owns the policy, and the next step. It never reopens the request.",
+      "type": "object",
+      "required": ["evaluation_id", "reason_code", "message", "policy_owner", "next_step"],
+      "additionalProperties": false,
+      "properties": {
+        "evaluation_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "reason_code": {"type": "string", "enum": ["denied_by_rule", "no_matching_rule", "evaluator_unavailable"]},
+        "rule_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"}
+        },
+        "message": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 1000},
+        "policy_owner": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 128},
+        "next_step": {"type": "string", "enum": ["revise_and_resubmit", "contact_policy_owner", "do_not_retry"]}
+      }
+    },
     "terminal_at": {"type": "string", "format": "date-time"},
     "decision_record_id": {"$ref": "common.schema.json#/$defs/identifier"},
     "consumed_at": {"type": "string", "format": "date-time"},

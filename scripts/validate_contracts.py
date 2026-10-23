@@ -825,6 +825,33 @@ def relay_errors(
     return errors
 
 
+def policy_refusal_errors(request: dict[str, Any]) -> list[str]:
+    """A policy refusal names the evaluation and the rules that actually denied, so it can be traced."""
+    refusal = request.get("policy_refusal")
+    if refusal is None:
+        return []
+    policy = request["policy"]
+    errors: list[str] = []
+    if policy.get("outcome") != "deny":
+        errors.append("policy refusal on a request the policy did not deny")
+    if refusal["evaluation_id"] != policy["evaluation_id"]:
+        errors.append("policy refusal cites another policy evaluation")
+    denying = {rule["rule_id"] for rule in policy.get("matched_rules", []) if rule["effect"] == "deny"}
+    for rule_id in refusal.get("rule_ids", []):
+        if rule_id not in denying:
+            errors.append(f"policy refusal names rule {rule_id} that did not deny")
+    reason = refusal["reason_code"]
+    unavailable = policy.get("evaluation_status") == "evaluator_unavailable"
+    consistent = {
+        "denied_by_rule": bool(denying) and bool(refusal.get("rule_ids")),
+        "no_matching_rule": policy.get("matched_rules") == [] and "rule_ids" not in refusal,
+        "evaluator_unavailable": unavailable and "rule_ids" not in refusal,
+    }[reason]
+    if not consistent or (unavailable and reason != "evaluator_unavailable"):
+        errors.append("policy refusal reason disagrees with the policy snapshot")
+    return errors
+
+
 def escalation_errors(request: dict[str, Any], events: list[dict[str, Any]]) -> list[str]:
     """Escalation notifies the actors the policy names after its delay, while the request is pending, and nothing more."""
     errors: list[str] = []
@@ -1164,6 +1191,7 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
     errors.extend(relay_errors(proposal, request, approvals, events))
     errors.extend(lifecycle_notice_errors(envelope))
     errors.extend(escalation_errors(request, events))
+    errors.extend(policy_refusal_errors(request))
     if request["status"] in {"approved", "consumed"} and len(approved_records) < requirements["minimum_approvals"]:
         errors.append("approval quorum is not satisfied")
     if requirements["distinct_approvers"]:
@@ -1682,7 +1710,7 @@ RECORD_SELF_CHECKS = {
     "approval-record": webauthn_signature_errors,
     "dispatch-record": execution_grant_errors,
     "approval-policy": policy_snapshot_errors,
-    "approval-request": lambda record: policy_snapshot_errors(record["policy"]),
+    "approval-request": lambda record: policy_snapshot_errors(record["policy"]) + policy_refusal_errors(record),
     "approval-pending-notice": pending_notice_errors,
 }
 
