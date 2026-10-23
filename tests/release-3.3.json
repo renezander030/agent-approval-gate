@@ -34,6 +34,11 @@
       "schema": "schemas/approval-envelope.schema.json",
       "instance": "examples/grant-origin-envelope.json",
       "semantic": true
+    },
+    {
+      "name": "policy outcome from an external decision point",
+      "schema": "schemas/approval-policy.schema.json",
+      "instance": "examples/approval-policy-external.json"
     }
   ],
   "negative": [
@@ -229,6 +234,18 @@
         {
           "op": "remove",
           "path": "/approvals/0/standing_grant/origin"
+        }
+      ]
+    },
+    {
+      "name": "external decision point without a protocol",
+      "schema": "schemas/approval-policy.schema.json",
+      "instance": "examples/approval-policy-external.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/evaluator/protocol"
         }
       ]
     }

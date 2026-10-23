@@ -416,6 +416,10 @@ def main() -> None:
         {"rule_id": "rule.support.linked-ticket", "effect": "auto_approve"},
     ]
     write("approval-policy-rules.json", rule_trace)
+    external = deepcopy(rule_trace)
+    external["evaluator"] = {"kind": "external_pdp", "identifier": "pdp.acme-corp.example", "protocol": "authzen",
+                             "decision_id": "authz_2026-04-28_77c1e2", "responded_at": "2026-04-28T09:14:24Z"}
+    write("approval-policy-external.json", external)
 
     review_snapshot = load("review-snapshot.json")
     review_snapshot["action_hash"] = action_hash

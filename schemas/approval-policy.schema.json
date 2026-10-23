@@ -28,6 +28,21 @@
       "type": "string",
       "enum": ["require_approval", "auto_approve", "deny"]
     },
+    "evaluator": {
+      "description": "Which engine produced this outcome. An external policy decision point names its protocol and, when it answered, the decision ID and response time it returned.",
+      "type": "object",
+      "required": ["kind", "identifier"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"type": "string", "enum": ["embedded", "external_pdp"]},
+        "identifier": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 128},
+        "protocol": {"type": "string", "enum": ["authzen", "opa", "cedar", "xacml", "custom"]},
+        "decision_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "responded_at": {"type": "string", "format": "date-time"}
+      },
+      "if": {"properties": {"kind": {"const": "external_pdp"}}, "required": ["kind"]},
+      "then": {"required": ["protocol"]}
+    },
     "evaluation_status": {
       "description": "decided when the evaluator returned a verdict; evaluator_unavailable when it errored, timed out, or returned no verdict.",
       "type": "string",

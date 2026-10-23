@@ -360,6 +360,15 @@ the grant, and `requirements.require_grant_origin` makes that mandatory. Across 
 envelopes the validator checks that the named approval issued that grant with the same
 terms and the same human, and that no grant is issued twice.
 
+### External policy decision points
+
+`ApprovalPolicySnapshot.evaluator` names the engine behind the outcome: `embedded`, or an
+`external_pdp` with its `protocol` (`authzen`, `opa`, `cedar`, `xacml`, or `custom`).
+When an external decision point answered, the snapshot keeps the `decision_id` it
+returned and `responded_at`, no later than `evaluated_at`, so a denial or an auto
+approval can be traced to that engine's own log. An unavailable decision point carries
+no answer, and the evaluator-unavailable rules above decide the outcome.
+
 ## WebAuthn approval proof
 
 `webauthn-es256` is an optional signature profile for authenticated web approvals.

@@ -620,6 +620,16 @@ def policy_snapshot_errors(policy: dict[str, Any]) -> list[str]:
     fallback = policy["requirements"].get("on_evaluator_unavailable", "deny")
     if policy.get("evaluation_status") == "evaluator_unavailable" and policy.get("outcome") != "deny" and fallback != "require_human_approval":
         errors.append("unavailable evaluator must deny unless policy escalates to a human")
+    evaluator = policy.get("evaluator", {})
+    if evaluator.get("kind") == "external_pdp":
+        answered = {"decision_id", "responded_at"} & set(evaluator)
+        if policy.get("evaluation_status") == "evaluator_unavailable":
+            if answered:
+                errors.append("an unavailable policy decision point cannot carry its answer")
+        elif len(answered) != 2:
+            errors.append("external policy decision lacks its decision_id or response time")
+    if "responded_at" in evaluator and parse_time(evaluator["responded_at"]) > parse_time(policy["evaluated_at"]):
+        errors.append("policy evaluator responded after the snapshot was taken")
     return errors
 
 

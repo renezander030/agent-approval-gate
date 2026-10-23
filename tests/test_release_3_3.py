@@ -220,5 +220,39 @@ class GrantOriginTests(unittest.TestCase):
         self.assertIn(f"envelopes 0 and 1: issue standing grant {self.issued['grant_id']} twice", collection_errors([self.issuing, second]))
 
 
+class PolicyEvaluatorTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.policy = load("examples/approval-policy-external.json")
+        self.evaluator = self.policy["evaluator"]
+
+    def test_external_decision_point(self) -> None:
+        self.assertEqual(record_errors("approval-policy", self.policy), [])
+
+    def test_external_decision_names_its_protocol(self) -> None:
+        self.evaluator.pop("protocol")
+        self.assertTrue(record_errors("approval-policy", self.policy))
+
+    def test_external_decision_keeps_its_answer(self) -> None:
+        self.evaluator.pop("decision_id")
+        self.assertIn("external policy decision lacks its decision_id or response time", record_errors("approval-policy", self.policy))
+
+    def test_unavailable_decision_point_has_no_answer(self) -> None:
+        self.policy.update(evaluation_status="evaluator_unavailable", outcome="deny")
+        self.policy.pop("matched_rules")
+        self.assertIn("an unavailable policy decision point cannot carry its answer", record_errors("approval-policy", self.policy))
+        for key in ("decision_id", "responded_at"):
+            self.evaluator.pop(key)
+        self.assertEqual(record_errors("approval-policy", self.policy), [])
+
+    def test_answer_precedes_the_snapshot(self) -> None:
+        self.evaluator["responded_at"] = "2026-04-28T09:14:25Z"
+        self.assertIn("policy evaluator responded after the snapshot was taken", record_errors("approval-policy", self.policy))
+
+    def test_envelope_checks_its_evaluator(self) -> None:
+        envelope = load("examples/approval-envelope.json")
+        envelope["request"]["policy"]["evaluator"] = {"kind": "external_pdp", "identifier": "pdp.acme-corp.example", "protocol": "opa"}
+        self.assertIn("external policy decision lacks its decision_id or response time", validate_envelope(envelope))
+
+
 if __name__ == "__main__":
     unittest.main()
