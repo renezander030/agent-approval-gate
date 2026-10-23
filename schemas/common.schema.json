@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.2.0/schemas/common.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.3.0/schemas/common.schema.json",
   "title": "Agent Approval Gate common definitions",
   "$defs": {
     "schema_version": {
       "type": "string",
-      "const": "3.2.0"
+      "const": "3.3.0"
     },
     "identifier": {
       "type": "string",
@@ -248,6 +248,24 @@
         "resource": {"$ref": "#/$defs/safe_text", "maxLength": 512},
         "kind": {"type": "string", "enum": ["version", "etag", "content_digest"]},
         "expected": {"$ref": "#/$defs/safe_text", "maxLength": 256}
+      }
+    },
+    "channel": {
+      "description": "Where a decision was requested or made. policy is the automatic path; every other value is a channel a human answers on.",
+      "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli", "policy"]
+    },
+    "prompt_channel": {
+      "description": "A channel a human answers on: every channel except policy.",
+      "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli"]
+    },
+    "trace_context": {
+      "description": "W3C Trace Context of the agent run, so approval records join its distributed trace. It is correlation data, not evidence of authority.",
+      "type": "object",
+      "required": ["traceparent"],
+      "additionalProperties": false,
+      "properties": {
+        "traceparent": {"type": "string", "pattern": "^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$"},
+        "tracestate": {"type": "string", "maxLength": 512, "pattern": "^[\\x20-\\x7E]*$"}
       }
     },
     "evidence_reference": {

@@ -12,21 +12,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from generate_examples import rebind_action as rebind, refresh_audit  # noqa: E402
+from generate_examples import rebind_action as rebind, rebind_approval, refresh_audit  # noqa: E402
 from test_release_3_1 import renamed, schema_errors  # noqa: E402
 from validate_contracts import (  # noqa: E402
-    collection_errors, digest, execution_grant_manifest, load, main, policy_outcome_errors,
-    policy_snapshot_errors, validate_envelope,
+    collection_errors, digest, execution_grant_manifest, load, main, policy_snapshot_errors,
+    validate_envelope,
 )
 
 LOCAL_ACTION_TYPES = ("shell.exec", "file.write")
-
-
-def rebind_approval(envelope: dict) -> dict:
-    """Recompute the resolution receipt and audit chain after editing the approval record."""
-    envelope["resolutions"][0]["approval_record_hash"] = digest(envelope["approvals"][0])
-    refresh_audit(envelope)
-    return envelope
 
 
 def prompt_channel_envelope(channel: str) -> dict:
@@ -174,8 +167,7 @@ class EvaluatorUnavailableTests(unittest.TestCase):
                 requirements.pop("on_evaluator_unavailable")
                 if fallback:
                     requirements["on_evaluator_unavailable"] = fallback
-                self.assertIn("unavailable evaluator must deny unless policy escalates to a human",
-                              policy_outcome_errors(envelope["request"], envelope["approvals"], envelope["dispatches"]))
+                self.assertIn("unavailable evaluator must deny unless policy escalates to a human", validate_envelope(envelope))
 
     def test_unavailable_evaluator_never_auto_approves(self) -> None:
         policy = unavailable_envelope()["request"]["policy"]

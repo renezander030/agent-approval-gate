@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.3.0/schemas/approval-pending-notice.schema.json",
+  "title": "ApprovalPendingNotice",
+  "description": "What the gate returns to the proposing call, or to an ancestor call, while a human decides: the request is pending, until when, and how the caller learns the outcome. It grants nothing; only the request's resolution does.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "notice_id",
+    "request_id",
+    "proposal_id",
+    "call_id",
+    "tenant",
+    "action_hash",
+    "request_revision",
+    "status",
+    "recipient_call_id",
+    "issued_at",
+    "expires_at",
+    "resume"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schema_version"},
+    "notice_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "request_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "proposal_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "call_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "tenant": {"type": "string", "minLength": 1, "maxLength": 64},
+    "action_hash": {"$ref": "common.schema.json#/$defs/digest"},
+    "request_revision": {"type": "integer", "minimum": 1},
+    "status": {"const": "pending"},
+    "recipient_call_id": {
+      "description": "The call this notice was returned to: the proposing call or one of its ancestors in the delegation chain.",
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "issued_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "next_check_at": {"type": "string", "format": "date-time"},
+    "channels": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {"type": "string", "$ref": "common.schema.json#/$defs/channel"}
+    },
+    "resume": {
+      "description": "await_resolution: the gate delivers the ResolutionRecord to the caller. poll_request: the caller reads the request state by request_id, no earlier than next_check_at.",
+      "type": "string",
+      "enum": ["await_resolution", "poll_request"]
+    },
+    "message": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 500}
+  },
+  "if": {"properties": {"resume": {"const": "poll_request"}}, "required": ["resume"]},
+  "then": {"required": ["next_check_at"]}
+}

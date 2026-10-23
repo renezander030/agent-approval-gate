@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.2.0/schemas/actions/file.write.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.3.0/schemas/actions/file.write.schema.json",
   "title": "file.write payload",
   "description": "Reference payload contract for one file change made by a dispatcher-owned executor: create, overwrite, or append text, or apply a unified diff. The approver sees the path, the environment it is written in, and the write mode.",
   "x-action-type": "file.write",

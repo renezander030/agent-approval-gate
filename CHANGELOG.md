@@ -1,5 +1,52 @@
 # Changelog
 
+## 3.3.0
+
+Approvals that stay legible while they wait, travel through delegated agents, and end
+in a refusal or a replacement.
+
+### Added
+
+- `ApprovalRequest.relay`: the ancestor calls that carried a delegated call's review to
+  its approver, each witnessed by an `approval.relayed` event. A relaying agent never
+  decides, and the decision binds the delegated call's exact action.
+- `ApprovalPendingNotice`: what the gate returns to the proposing call and its parent
+  calls while a human decides: request, action hash, deadline, channels, and whether
+  to await the resolution or poll after `next_check_at`. Envelopes can carry the
+  notices they issued, and `--record approval-pending-notice` checks one alone.
+- `requirements.escalation` and `ApprovalRequest.escalations`: named actors are told
+  after a delay, with an `approval.escalated` witness. Escalation grants no decision
+  rights and no extra time.
+- `ApprovalRequest.policy_refusal`: a policy denial names the deciding evaluation, the
+  denying rules, a redacted message, the policy owner, and the next step, checked
+  against the policy snapshot.
+- `ApprovalRecord.issued_grant` and `standing_grant.origin`: a standing grant is issued
+  explicitly by a human approval, an auto approval can name that origin, and
+  `requirements.require_grant_origin` makes it mandatory. Envelope sets check that the
+  origin issued the same terms.
+- `ApprovalPolicySnapshot.evaluator`: an embedded engine or an external policy decision
+  point with its protocol, decision ID, and response time.
+- `terminal_reason: "superseded"` with `superseded_by`: a pending request replaced by a
+  newer proposal names its successor, and later decisions on it are refused.
+- W3C `trace_context` on requests and audit events, outside the hashed action.
+- A `network.egress` reference action schema for one host, port, and protocol from a
+  named environment, for a connection or a session with a time bound.
+- Complete [delegated](examples/delegated-envelope.json),
+  [escalated](examples/escalated-envelope.json),
+  [policy-denied](examples/policy-denied-envelope.json),
+  [grant-issuing](examples/grant-issuing-envelope.json),
+  [grant-origin](examples/grant-origin-envelope.json),
+  [superseded](examples/superseded-envelope.json), and
+  [traced](examples/traced-envelope.json) lifecycles, and portable vectors in
+  `tests/release-3.3.json`.
+
+### Compatibility
+
+Every addition is optional on existing records, and the new enum values extend closed
+sets. Schema IDs and `schema_version` move to `3.3.0`; continue validating stored v3.2
+records with the v3.2.0 schemas and do not relabel them. Records produced under 3.3 must
+cite the v3.3.0 payload schema ID and digest.
+
 ## 3.2.0
 
 Policies you can explain, pre-approvals with limits, and dispatches that prove which

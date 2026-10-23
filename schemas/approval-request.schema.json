@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.2.0/schemas/approval-request.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.3.0/schemas/approval-request.schema.json",
   "title": "ApprovalRequest",
   "description": "Durable state for one pending approval. Resolve it by request_id with compare-and-set semantics; never infer authority from payload shape or conversation text.",
   "type": "object",
@@ -52,10 +52,7 @@
         "required": ["channel", "target_hash", "delivery_status"],
         "additionalProperties": false,
         "properties": {
-          "channel": {
-            "type": "string",
-            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli", "policy"]
-          },
+          "channel": {"type": "string", "$ref": "common.schema.json#/$defs/channel"},
           "target_hash": {"$ref": "common.schema.json#/$defs/digest"},
           "delivery_status": {
             "type": "string",
@@ -71,6 +68,65 @@
       "maxItems": 20,
       "items": {"$ref": "common.schema.json#/$defs/evidence_reference"}
     },
+    "relay": {
+      "description": "Ancestor calls that carried this request's review up the delegation chain to the human, nearest first. A relay forwards the review; the decision stays with the approver and binds the delegated call's exact action.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 15,
+      "items": {
+        "type": "object",
+        "required": ["call_id", "agent_identity", "relayed_at"],
+        "additionalProperties": false,
+        "properties": {
+          "call_id": {"$ref": "common.schema.json#/$defs/identifier"},
+          "agent_identity": {"$ref": "common.schema.json#/$defs/identifier"},
+          "relayed_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "escalations": {
+      "description": "Notices sent under the policy's escalation while the request was pending, in time order.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "required": ["escalated_at", "notified_actor_ids", "channel"],
+        "additionalProperties": false,
+        "properties": {
+          "escalated_at": {"type": "string", "format": "date-time"},
+          "notified_actor_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 128}
+          },
+          "channel": {"type": "string", "$ref": "common.schema.json#/$defs/prompt_channel"}
+        }
+      }
+    },
+    "policy_refusal": {
+      "description": "What the proposing agent and its user are told when the policy denies the request: the evaluation and rules that decided, who owns the policy, and the next step. It never reopens the request.",
+      "type": "object",
+      "required": ["evaluation_id", "reason_code", "message", "policy_owner", "next_step"],
+      "additionalProperties": false,
+      "properties": {
+        "evaluation_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "reason_code": {"type": "string", "enum": ["denied_by_rule", "no_matching_rule", "evaluator_unavailable"]},
+        "rule_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"}
+        },
+        "message": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 1000},
+        "policy_owner": {"$ref": "common.schema.json#/$defs/safe_text", "maxLength": 128},
+        "next_step": {"type": "string", "enum": ["revise_and_resubmit", "contact_policy_owner", "do_not_retry"]}
+      }
+    },
+    "trace_context": {"$ref": "common.schema.json#/$defs/trace_context"},
     "terminal_at": {"type": "string", "format": "date-time"},
     "decision_record_id": {"$ref": "common.schema.json#/$defs/identifier"},
     "consumed_at": {"type": "string", "format": "date-time"},
@@ -86,8 +142,19 @@
         "policy_failed",
         "delivery_failed",
         "consumed_for_dispatch",
-        "approval_revoked"
+        "approval_revoked",
+        "superseded"
       ]
+    },
+    "superseded_by": {
+      "description": "The newer request that replaced this pending one. A decision on a superseded request is refused; the reviewer acts on the successor.",
+      "type": "object",
+      "required": ["request_id", "proposal_id"],
+      "additionalProperties": false,
+      "properties": {
+        "request_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "proposal_id": {"$ref": "common.schema.json#/$defs/identifier"}
+      }
     },
     "revocation": {
       "description": "Withdrawal of an approved, unconsumed request. A conditional transition from approved to revoked must fail when the request was already consumed.",
@@ -113,6 +180,11 @@
     }
   },
   "allOf": [
+    {
+      "if": {"properties": {"terminal_reason": {"const": "superseded"}}, "required": ["terminal_reason"]},
+      "then": {"required": ["superseded_by"]},
+      "else": {"not": {"required": ["superseded_by"]}}
+    },
     {
       "if": {"properties": {"status": {"const": "pending"}}, "required": ["status"]},
       "then": {
@@ -174,7 +246,7 @@
       "if": {"properties": {"status": {"const": "cancelled"}}, "required": ["status"]},
       "then": {
         "required": ["terminal_at", "terminal_reason"],
-        "properties": {"terminal_reason": {"const": "cancelled_by_requester"}},
+        "properties": {"terminal_reason": {"enum": ["cancelled_by_requester", "superseded"]}},
         "not": {
           "anyOf": [
             {"required": ["decision_record_id"]},

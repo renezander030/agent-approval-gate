@@ -11,7 +11,7 @@ import json
 import math
 import re
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -620,6 +620,16 @@ def policy_snapshot_errors(policy: dict[str, Any]) -> list[str]:
     fallback = policy["requirements"].get("on_evaluator_unavailable", "deny")
     if policy.get("evaluation_status") == "evaluator_unavailable" and policy.get("outcome") != "deny" and fallback != "require_human_approval":
         errors.append("unavailable evaluator must deny unless policy escalates to a human")
+    evaluator = policy.get("evaluator", {})
+    if evaluator.get("kind") == "external_pdp":
+        answered = {"decision_id", "responded_at"} & set(evaluator)
+        if policy.get("evaluation_status") == "evaluator_unavailable":
+            if answered:
+                errors.append("an unavailable policy decision point cannot carry its answer")
+        elif len(answered) != 2:
+            errors.append("external policy decision lacks its decision_id or response time")
+    if "responded_at" in evaluator and parse_time(evaluator["responded_at"]) > parse_time(policy["evaluated_at"]):
+        errors.append("policy evaluator responded after the snapshot was taken")
     return errors
 
 
@@ -749,6 +759,28 @@ def standing_grant_errors(
         for conflict, issuer in (("agent", "the delegated agent"), ("requester", "the requester"), ("excluded", "an excluded actor")):
             if conflict in conflicts:
                 errors.append(f"{label} standing grant was issued by {issuer}")
+        if requirements.get("require_grant_origin") and "origin" not in grant:
+            errors.append(f"{label} standing grant does not name the approval that issued it")
+    return errors
+
+
+def grant_issuance_errors(proposal: dict[str, Any], approvals: list[dict[str, Any]]) -> list[str]:
+    """Only an approving decision, which the schema ties to a present human, issues a standing grant, from its decision onward."""
+    errors: list[str] = []
+    for approval in approvals:
+        issued = approval.get("issued_grant")
+        if issued is None:
+            continue
+        label = f"approval {approval['approval_id']} issues standing grant {issued['grant_id']}"
+        if approval["decision"] != "approved":
+            errors.append(f"{label} without approving")
+        granted_at = parse_time(issued["granted_at"])
+        if granted_at < parse_time(approval["decided_at"]):
+            errors.append(f"{label} before its decision")
+        if parse_time(issued["expires_at"]) <= granted_at:
+            errors.append(f"{label} that expires before it starts")
+        if issued["scope"]["tenant"] != proposal["tenant"]:
+            errors.append(f"{label} for another tenant")
     return errors
 
 
@@ -783,6 +815,186 @@ def revocation_errors(
             errors.append("audit revocation actor disagrees with request")
         if event["detail"].get("reason_code", revocation["reason_code"]) != revocation["reason_code"]:
             errors.append("audit revocation reason disagrees with request")
+    return errors
+
+
+def relay_errors(
+    proposal: dict[str, Any], request: dict[str, Any], approvals: list[dict[str, Any]], events: list[dict[str, Any]]
+) -> list[str]:
+    """A review climbs the delegation chain through ancestor calls; the relaying agents never decide."""
+    errors: list[str] = []
+    relay = request.get("relay", [])
+    ancestors = {hop["call_id"]: (index, hop["agent"]["identity"]) for index, hop in enumerate(proposal["delegation_chain"][:-1])}
+    previous_index: int | None = None
+    previous_at: datetime | None = None
+    for hop in relay:
+        label = f"relay hop {hop['call_id']}"
+        if hop["call_id"] not in ancestors:
+            errors.append(f"{label} is not an ancestor of the proposing call")
+        else:
+            index, identity = ancestors[hop["call_id"]]
+            if hop["agent_identity"] != identity:
+                errors.append(f"{label} names another agent than its delegation hop")
+            if previous_index is not None and index >= previous_index:
+                errors.append("relay hops do not climb the delegation chain nearest first")
+            previous_index = index
+        relayed_at = parse_time(hop["relayed_at"])
+        if not parse_time(request["requested_at"]) <= relayed_at < parse_time(request["expires_at"]):
+            errors.append(f"{label} was relayed outside the request window")
+        if previous_at is not None and relayed_at < previous_at:
+            errors.append("relay times are not monotonic")
+        previous_at = relayed_at
+    relaying_agents = {hop["agent_identity"] for hop in relay}
+    for approval in approvals:
+        if approval["decided_by"]["identifier"] in relaying_agents:
+            errors.append(f"approval {approval['approval_id']} was decided by a relaying agent")
+    witnesses = [event for event in events if event["event_type"] == "approval.relayed"]
+    expected = {(hop["call_id"], parse_time(hop["relayed_at"]), hop["agent_identity"]) for hop in relay}
+    observed = {(event["detail"].get("metadata", {}).get("call_id"), parse_time(event["occurred_at"]), event["actor"]["identifier"])
+                for event in witnesses if event["references"].get("request_id") == request["request_id"]}
+    if len(witnesses) != len(relay) or observed != expected:
+        errors.append("audit approval.relayed witnesses disagree with the request relay")
+    return errors
+
+
+def policy_refusal_errors(request: dict[str, Any]) -> list[str]:
+    """A policy refusal names the evaluation and the rules that actually denied, so it can be traced."""
+    refusal = request.get("policy_refusal")
+    if refusal is None:
+        return []
+    policy = request["policy"]
+    errors: list[str] = []
+    if policy.get("outcome") != "deny":
+        errors.append("policy refusal on a request the policy did not deny")
+    if refusal["evaluation_id"] != policy["evaluation_id"]:
+        errors.append("policy refusal cites another policy evaluation")
+    denying = {rule["rule_id"] for rule in policy.get("matched_rules", []) if rule["effect"] == "deny"}
+    for rule_id in refusal.get("rule_ids", []):
+        if rule_id not in denying:
+            errors.append(f"policy refusal names rule {rule_id} that did not deny")
+    reason = refusal["reason_code"]
+    unavailable = policy.get("evaluation_status") == "evaluator_unavailable"
+    consistent = {
+        "denied_by_rule": bool(denying) and bool(refusal.get("rule_ids")),
+        "no_matching_rule": policy.get("matched_rules") == [] and "rule_ids" not in refusal,
+        "evaluator_unavailable": unavailable and "rule_ids" not in refusal,
+    }[reason]
+    if not consistent or (unavailable and reason != "evaluator_unavailable"):
+        errors.append("policy refusal reason disagrees with the policy snapshot")
+    return errors
+
+
+def supersession_errors(request: dict[str, Any], approvals: list[dict[str, Any]], events: list[dict[str, Any]]) -> list[str]:
+    """A superseded request points at its successor, and nothing decides it after it was replaced."""
+    if request.get("terminal_reason") != "superseded":
+        return []
+    errors: list[str] = []
+    successor = request["superseded_by"]
+    if successor["request_id"] == request["request_id"] or successor["proposal_id"] == request["proposal_id"]:
+        errors.append("superseded request names itself as its successor")
+    superseded_at = parse_time(request["terminal_at"])
+    for approval in approvals:
+        if parse_time(approval["decided_at"]) >= superseded_at:
+            errors.append(f"approval {approval['approval_id']} answers a request that was superseded")
+    for event in events:
+        if event["event_type"] == "approval.cancelled" and event["detail"].get("reason_code", "superseded") != "superseded":
+            errors.append("audit cancellation reason disagrees with the supersession")
+    return errors
+
+
+def trace_id(context: dict[str, Any]) -> str:
+    return context["traceparent"].split("-")[1]
+
+
+def trace_context_errors(request: dict[str, Any], events: list[dict[str, Any]]) -> list[str]:
+    """Trace context correlates one lifecycle with one agent run; it never mixes traces."""
+    errors: list[str] = []
+    expected = trace_id(request["trace_context"]) if "trace_context" in request else None
+    if expected is not None and set(expected) == {"0"}:
+        errors.append("request trace context has an invalid trace ID")
+    for event in events:
+        if "trace_context" not in event:
+            continue
+        if expected is None:
+            errors.append(f"audit event {event['event_id']} carries a trace context the request does not")
+        elif trace_id(event["trace_context"]) != expected:
+            errors.append(f"audit event {event['event_id']} belongs to another trace")
+    return errors
+
+
+def escalation_errors(request: dict[str, Any], events: list[dict[str, Any]]) -> list[str]:
+    """Escalation notifies the actors the policy names after its delay, while the request is pending, and nothing more."""
+    errors: list[str] = []
+    escalations = request.get("escalations", [])
+    policy = request["policy"]["requirements"].get("escalation")
+    if escalations and policy is None:
+        return ["request escalated without a policy escalation"]
+    earliest = parse_time(request["requested_at"]) + timedelta(seconds=policy["after_seconds"]) if policy else None
+    pending_until = parse_time(request.get("terminal_at", request["expires_at"]))
+    previous: datetime | None = None
+    for item in escalations:
+        escalated_at = parse_time(item["escalated_at"])
+        label = f"escalation at {item['escalated_at']}"
+        if earliest and escalated_at < earliest:
+            errors.append(f"{label} came before the policy's escalation delay")
+        if escalated_at >= pending_until:
+            errors.append(f"{label} happened after the request left pending")
+        if previous is not None and escalated_at < previous:
+            errors.append("escalation times are not monotonic")
+        previous = escalated_at
+        if not set(item["notified_actor_ids"]) <= set(policy["notify_actor_ids"]):
+            errors.append(f"{label} notified an actor the policy does not name")
+    witnesses = [event for event in events if event["event_type"] == "approval.escalated"]
+    expected = sorted((parse_time(item["escalated_at"]), item["channel"]) for item in escalations)
+    observed = sorted((parse_time(event["occurred_at"]), event["detail"].get("channel")) for event in witnesses
+                      if event["references"].get("request_id") == request["request_id"])
+    if len(witnesses) != len(escalations) or observed != expected:
+        errors.append("audit approval.escalated witnesses disagree with the request escalations")
+    return errors
+
+
+def pending_notice_errors(notice: dict[str, Any]) -> list[str]:
+    """A pending notice points forward in time: it is issued before the deadline and asks for a check before it."""
+    errors: list[str] = []
+    label = f"pending notice {notice['notice_id']}"
+    issued_at, expires_at = parse_time(notice["issued_at"]), parse_time(notice["expires_at"])
+    if issued_at >= expires_at:
+        errors.append(f"{label} was issued at or after its deadline")
+    if "next_check_at" in notice and not issued_at < parse_time(notice["next_check_at"]) <= expires_at:
+        errors.append(f"{label} next_check_at is outside its pending window")
+    return errors
+
+
+def lifecycle_notice_errors(envelope: dict[str, Any]) -> list[str]:
+    """Every pending notice describes this request while it was pending, to a call in its delegation chain."""
+    errors: list[str] = []
+    proposal, request = envelope["proposal"], envelope["request"]
+    chain_calls = {hop["call_id"] for hop in proposal["delegation_chain"]}
+    used_channels = {item["channel"] for item in request["channels"]}
+    pending_until = parse_time(request.get("terminal_at", request["expires_at"]))
+    notice_ids: set[str] = set()
+    for notice in envelope.get("pending_notices", []):
+        label = f"pending notice {notice['notice_id']}"
+        if notice["notice_id"] in notice_ids:
+            errors.append("pending notices reuse notice_id")
+        notice_ids.add(notice["notice_id"])
+        errors.extend(pending_notice_errors(notice))
+        for field in ("request_id", "proposal_id", "call_id", "tenant", "action_hash"):
+            if notice[field] != request[field]:
+                errors.append(f"{label} {field} does not match the request")
+        if notice["recipient_call_id"] not in chain_calls:
+            errors.append(f"{label} is addressed outside the delegation chain")
+        if notice["expires_at"] != request["expires_at"]:
+            errors.append(f"{label} misstates the request deadline")
+        issued_at = parse_time(notice["issued_at"])
+        if not parse_time(request["requested_at"]) <= issued_at < pending_until:
+            errors.append(f"{label} was issued while the request was not pending")
+        if issued_at > parse_time(envelope["captured_at"]):
+            errors.append("envelope capture predates a contained record")
+        if notice["request_revision"] >= request["revision"]:
+            errors.append(f"{label} cites a revision after the request left pending")
+        if not set(notice.get("channels", [])) <= used_channels:
+            errors.append(f"{label} names a channel the request did not use")
     return errors
 
 
@@ -1046,6 +1258,13 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
     errors.extend(effect_errors(proposal, review_snapshots, request, approvals))
     errors.extend(precondition_errors(proposal, review_snapshots, dispatches))
     errors.extend(standing_grant_errors(proposal, request, approvals))
+    errors.extend(grant_issuance_errors(proposal, approvals))
+    errors.extend(relay_errors(proposal, request, approvals, events))
+    errors.extend(lifecycle_notice_errors(envelope))
+    errors.extend(escalation_errors(request, events))
+    errors.extend(policy_refusal_errors(request))
+    errors.extend(supersession_errors(request, approvals, events))
+    errors.extend(trace_context_errors(request, events))
     if request["status"] in {"approved", "consumed"} and len(approved_records) < requirements["minimum_approvals"]:
         errors.append("approval quorum is not satisfied")
     if requirements["distinct_approvers"]:
@@ -1489,7 +1708,7 @@ def validate_repository() -> list[str]:
         if "/main/" in identifier:
             failures.append(f"{path}: $id points at mutable main")
 
-    for corpus_path in ("tests/conformance.json", "tests/adversarial.json", "tests/hardening.json", "tests/release-3.1.json", "tests/release-3.2.json"):
+    for corpus_path in ("tests/conformance.json", "tests/adversarial.json", "tests/hardening.json", "tests/release-3.1.json", "tests/release-3.2.json", "tests/release-3.3.json"):
         corpus = load(corpus_path)
         for vector in corpus["positive"]:
             validator = validator_for(vector["schema"], schemas, registry)
@@ -1564,7 +1783,8 @@ RECORD_SELF_CHECKS = {
     "approval-record": webauthn_signature_errors,
     "dispatch-record": execution_grant_errors,
     "approval-policy": policy_snapshot_errors,
-    "approval-request": lambda record: policy_snapshot_errors(record["policy"]),
+    "approval-request": lambda record: policy_snapshot_errors(record["policy"]) + policy_refusal_errors(record),
+    "approval-pending-notice": pending_notice_errors,
 }
 
 
@@ -1633,12 +1853,14 @@ def audit_export_errors(
 
 
 def collection_errors(envelopes: list[dict[str, Any]]) -> list[str]:
-    """Identities that must stay unique across every lifecycle a deployment admitted."""
+    """Rules across every lifecycle a deployment admitted: unique identities, standing grant uses, terms and origins, idempotency, and successors."""
     errors: list[str] = []
     seen: dict[str, dict[Any, int]] = {
-        "proposal_id": {}, "request_id": {}, "call": {}, "dispatch_id": {}, "audit_stream": {}, "grant_use": {},
+        "proposal_id": {}, "request_id": {}, "call": {}, "dispatch_id": {}, "audit_stream": {}, "grant_use": {}, "grant_issue": {},
     }
     grants: dict[str, tuple[int, str]] = {}
+    cited: list[tuple[int, dict[str, Any]]] = []
+    approvals_by_id: dict[str, tuple[int, dict[str, Any]]] = {}
     idempotency: dict[tuple[str, str], tuple[int, str]] = {}
 
     def claim(kind: str, key: Any, index: int, message: str) -> None:
@@ -1662,11 +1884,39 @@ def collection_errors(envelopes: list[dict[str, Any]]) -> list[str]:
             if grants.setdefault(grant["grant_id"], (index, terms))[1] != terms:
                 errors.append(f"envelopes {grants[grant['grant_id']][0]} and {index}: standing grant {grant['grant_id']} changes its terms")
             claim("grant_use", (grant["grant_id"], grant["use_number"]), index, f"use standing grant {grant['grant_id']} number {grant['use_number']} twice")
+            if "origin" in grant:
+                cited.append((index, grant))
+        for approval in envelope["approvals"]:
+            approvals_by_id.setdefault(approval["approval_id"], (index, approval))
+            if "issued_grant" in approval:
+                claim("grant_issue", approval["issued_grant"]["grant_id"], index, f"issue standing grant {approval['issued_grant']['grant_id']} twice")
         key = (proposal["tenant"], proposal["idempotency_key"])
         action_hash = digest(proposal)
         if key in idempotency and idempotency[key][1] != action_hash:
             errors.append(f"envelopes {idempotency[key][0]} and {index}: idempotency_key binds two different actions")
         idempotency.setdefault(key, (index, action_hash))
+    requests = {envelope["request"]["request_id"]: (index, envelope) for index, envelope in enumerate(envelopes)}
+    for index, envelope in enumerate(envelopes):
+        successor = envelope["request"].get("superseded_by")
+        if successor is None or successor["request_id"] not in requests:
+            continue
+        later, replacement = requests[successor["request_id"]]
+        prefix = f"envelopes {index} and {later}: request {envelope['request']['request_id']}"
+        if replacement["proposal"]["proposal_id"] != successor["proposal_id"] or replacement["proposal"]["tenant"] != envelope["proposal"]["tenant"]:
+            errors.append(f"{prefix} names a successor for another proposal or tenant")
+        elif parse_time(replacement["proposal"]["created_at"]) < parse_time(envelope["request"]["requested_at"]):
+            errors.append(f"{prefix} names a successor proposed before it")
+    for index, grant in cited:
+        origin = grant["origin"]
+        if origin["approval_id"] not in approvals_by_id:
+            continue
+        source, approval = approvals_by_id[origin["approval_id"]]
+        issued = approval.get("issued_grant")
+        prefix = f"envelopes {source} and {index}: standing grant {grant['grant_id']}"
+        if issued is None or issued["grant_id"] != grant["grant_id"] or approval["request_id"] != origin["request_id"]:
+            errors.append(f"{prefix} names approval {origin['approval_id']}, which did not issue it")
+        elif grant["granted_by"] != approval["decided_by"] or any(grant[key] != issued[key] for key in ("granted_at", "expires_at", "scope", "max_uses")):
+            errors.append(f"{prefix} changes the terms its approval issued")
     return errors
 
 

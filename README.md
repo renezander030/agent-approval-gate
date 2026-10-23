@@ -53,7 +53,7 @@ Nine boundaries make the gate real:
 If the agent still has the side-effect credential, the approval path remains optional
 from the agent's point of view.
 
-## Contracts in v3.2.0
+## Contracts in v3.3.0
 
 | Contract | Purpose |
 |---|---|
@@ -62,6 +62,7 @@ from the agent's point of view.
 | [`review-snapshot.schema.json`](schemas/review-snapshot.schema.json) | Exact decision material shown to the approver, bound by canonical hashes |
 | [`approval-policy.schema.json`](schemas/approval-policy.schema.json) | Immutable policy revision, material inputs, quorum, and channel requirements |
 | [`approval-request.schema.json`](schemas/approval-request.schema.json) | Durable pending identity, notifications, terminal state, and single-use consumption |
+| [`approval-pending-notice.schema.json`](schemas/approval-pending-notice.schema.json) | What the agent and its parent calls receive while a request waits on a human |
 | [`approval-record.schema.json`](schemas/approval-record.schema.json) | Human or policy decision, action and payload hashes, signatures, and settlement evidence |
 | [`resolution-record.schema.json`](schemas/resolution-record.schema.json) | Durable terminal receipt with independent delivery and acknowledgement state |
 | [`authority-snapshot.schema.json`](schemas/authority-snapshot.schema.json) | Dispatch-time authority status for approver, policy, workspace, and dispatcher |
@@ -69,9 +70,9 @@ from the agent's point of view.
 | [`audit-event.schema.json`](schemas/audit-event.schema.json) | Redacted lifecycle evidence with actor, event time, ingestion time, and hash chain |
 | [`audit-snapshot.schema.json`](schemas/audit-snapshot.schema.json) | Completeness manifest for one exported audit-event set |
 | [`approval-envelope.schema.json`](schemas/approval-envelope.schema.json) | Portable bundle plus cross-contract profile for a completed lifecycle |
-| [`actions/*.schema.json`](schemas/actions/) | Strict payload references for `email.send`, `crm.update_record`, `ticket.create`, `db.update_row`, `api.call`, `n8n.trigger_workflow`, `shell.exec`, and `file.write`, each naming the fields the approver must see as the target |
+| [`actions/*.schema.json`](schemas/actions/) | Strict payload references for `email.send`, `crm.update_record`, `ticket.create`, `db.update_row`, `api.call`, `n8n.trigger_workflow`, `shell.exec`, `file.write`, and `network.egress`, each naming the fields the approver must see as the target |
 
-Schema IDs are pinned to the `v3.2.0` release. Pin a released ID in production; do not
+Schema IDs are pinned to the `v3.3.0` release. Pin a released ID in production; do not
 resolve schemas from the mutable default branch.
 
 ## Quick start
@@ -124,6 +125,18 @@ channels. [`docs/framework-mapping.md`](docs/framework-mapping.md) maps LangGrap
 the OpenAI Agents SDK, the Vercel AI SDK, Google ADK, pydantic-ai, Mastra, MCP, and
 coding-agent hooks onto the records.
 
+Version 3.3 makes waiting, delegated, and refused approvals legible. A
+[delegated](examples/delegated-envelope.json) call's request records how its review
+climbed the delegation chain, and a relaying agent never decides. A pending notice tells
+the agent and its parent calls that a human is deciding, until when, and how to resume.
+Pending requests can be [escalated](examples/escalated-envelope.json) to named actors
+without widening who may decide, and a request [replaced](examples/superseded-envelope.json)
+by a newer one points at its successor. A [policy denial](examples/policy-denied-envelope.json)
+names its rule, owner, and next step; the policy snapshot can name an external decision
+point and its decision ID. A standing grant can name the [human approval that issued
+it](examples/grant-issuing-envelope.json), lifecycles can carry W3C trace context, and
+`network.egress` joins the action catalog.
+
 [`tests/canonicalization.json`](tests/canonicalization.json) is a language-neutral
 RFC 8785 corpus with exact canonical UTF-8 bytes and SHA-256 results. Use it to prove
 that implementations in different languages bind the same document to the same hash.
@@ -147,7 +160,7 @@ action per idempotency key. Audit exports verify offline, including a range that
 continues from a retained checkpoint hash. In CI, use the bundled action:
 
 ```yaml
-- uses: renezander030/agent-approval-gate@v3.2.0
+- uses: renezander030/agent-approval-gate@v3.3.0
   with:
     envelopes: out/envelope.json
 ```

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.3.0/schemas/actions/network.egress.schema.json",
+  "title": "network.egress payload",
+  "description": "Reference payload contract for opening outbound network access from an agent's environment to one named host and port, for one connection or one session and a bounded time. The approver sees the destination together with the environment it is opened from and how long it stays open. Wildcard hosts are not a single destination and are refused.",
+  "x-action-type": "network.egress",
+  "x-review-target": ["host", "port", "protocol", "environment", "scope"],
+  "type": "object",
+  "required": ["host", "port", "protocol", "environment", "scope", "max_duration_seconds"],
+  "additionalProperties": false,
+  "properties": {
+    "host": {
+      "type": "string",
+      "maxLength": 253,
+      "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$"
+    },
+    "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+    "protocol": {"type": "string", "enum": ["https", "http", "tcp", "udp"]},
+    "environment": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "kind": {"type": "string", "enum": ["host", "sandbox", "container", "remote"]}
+      }
+    },
+    "scope": {"type": "string", "enum": ["single_connection", "session"]},
+    "max_duration_seconds": {"type": "integer", "minimum": 1, "maximum": 86400},
+    "methods": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 7,
+      "uniqueItems": true,
+      "items": {"type": "string", "enum": ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]}
+    },
+    "purpose": {"type": "string", "minLength": 1, "maxLength": 500, "pattern": "^[^\\u0000-\\u001F\\u007F\\u202A-\\u202E\\u2066-\\u2069]*$"}
+  },
+  "if": {"properties": {"protocol": {"enum": ["tcp", "udp"]}}, "required": ["protocol"]},
+  "then": {"not": {"required": ["methods"]}}
+}

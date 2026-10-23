@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.2.0/schemas/approval-record.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.3.0/schemas/approval-record.schema.json",
   "title": "ApprovalRecord",
   "description": "An append-only terminal decision bound to the exact effective action and payload reviewed by the approver.",
   "type": "object",
@@ -39,10 +39,7 @@
     "decided_by": {"$ref": "common.schema.json#/$defs/actor"},
     "decided_at": {"type": "string", "format": "date-time"},
     "recorded_at": {"type": "string", "format": "date-time"},
-    "channel": {
-      "type": "string",
-      "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli", "policy"]
-    },
+    "channel": {"type": "string", "$ref": "common.schema.json#/$defs/channel"},
     "comment": {"type": "string", "maxLength": 2000},
     "modifications": {
       "type": "array",
@@ -90,7 +87,30 @@
           }
         },
         "max_uses": {"type": "integer", "minimum": 1, "maximum": 10000},
-        "use_number": {"type": "integer", "minimum": 1, "maximum": 10000}
+        "use_number": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "origin": {
+          "description": "The human approval that issued this grant.",
+          "type": "object",
+          "required": ["request_id", "approval_id"],
+          "additionalProperties": false,
+          "properties": {
+            "request_id": {"$ref": "common.schema.json#/$defs/identifier"},
+            "approval_id": {"$ref": "common.schema.json#/$defs/identifier"}
+          }
+        }
+      }
+    },
+    "issued_grant": {
+      "description": "A standing grant this human approval explicitly issued in addition to approving its own action. Its granting human is the approver; without it, an approval covers its own action only.",
+      "type": "object",
+      "required": ["grant_id", "granted_at", "expires_at", "scope", "max_uses"],
+      "additionalProperties": false,
+      "properties": {
+        "grant_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "granted_at": {"type": "string", "format": "date-time"},
+        "expires_at": {"type": "string", "format": "date-time"},
+        "scope": {"$ref": "#/properties/standing_grant/properties/scope"},
+        "max_uses": {"type": "integer", "minimum": 1, "maximum": 10000}
       }
     },
     "rejection_settlement": {
@@ -213,9 +233,7 @@
             },
             "required": ["authentication"]
           },
-          "channel": {
-            "enum": ["telegram", "slack", "email", "web", "n8n_form", "mcp_elicitation", "teams", "cli"]
-          }
+          "channel": {"$ref": "common.schema.json#/$defs/prompt_channel"}
         }
       }
     },

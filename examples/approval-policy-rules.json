@@ -1,10 +1,10 @@
 {
-  "schema_version": "3.2.0",
+  "schema_version": "3.3.0",
   "policy_id": "policy.high-risk-email.v1",
   "revision": "2026-04-15.3",
   "policy_digest": "sha256:a4f5ac837738a43e70baa0f2d602bbba2f2285a518beb568746f310f0678dc35",
   "evaluation_id": "eval_2026-04-28_1c4f8a00",
-  "material_input_hash": "sha256:2991d5f888b4369ae368a0e1effa0d4c9e74fe4ddf8c607ab96849aba0b28691",
+  "material_input_hash": "sha256:e67cf5b14a0ecf2b2a86aa1f71be55d5524e962e91eba67edcc8cc840197cf11",
   "evaluated_at": "2026-04-28T09:14:24Z",
   "outcome": "require_approval",
   "requirements": {

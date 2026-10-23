@@ -1,0 +1,10 @@
+{
+  "host": "registry.npmjs.org",
+  "port": 443,
+  "protocol": "https",
+  "environment": {"id": "sandbox-session-4471", "kind": "sandbox"},
+  "scope": "session",
+  "max_duration_seconds": 1800,
+  "methods": ["GET", "HEAD"],
+  "purpose": "Install the locked dependencies for the billing-service test run."
+}

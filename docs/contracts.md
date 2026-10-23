@@ -2,8 +2,8 @@
 
 ## Versioning
 
-The release version and every schema's `schema_version` are `3.2.0`. Schema `$id`
-values resolve through the immutable `v3.2.0` tag. A consumer may cache schemas by
+The release version and every schema's `schema_version` are `3.3.0`. Schema `$id`
+values resolve through the immutable `v3.3.0` tag. A consumer may cache schemas by
 `$id`; it must not replace a cached release schema with content from `main`.
 
 - Patch releases may clarify descriptions and add compatible examples or tests.
@@ -290,6 +290,112 @@ that channel.
 See [framework-mapping.md](framework-mapping.md) for where these records come from in
 common agent frameworks.
 
+## Version 3.3 additions
+
+### Relayed reviews in delegated work
+
+A delegated call often reaches its human through the parent conversation. The
+request records that path in `relay`: the ancestor calls that carried the review, nearest
+first, each with its agent identity and `relayed_at`. The validator requires that:
+
+- every relay hop is an ancestor of the proposing call in the proposal's delegation
+  chain and names that hop's agent;
+- the hops climb the chain one call at a time, inside the request window, in time order;
+- no relaying agent decides the request: a relay forwards the review, and the decision
+  binds the delegated call's exact action hash like any other;
+- each hop has one `approval.relayed` audit event with the hop's agent as actor, its
+  `call_id` in `detail.metadata`, and the relay time.
+
+Approval text copied into a child conversation is not an approval. The child acts on
+the resolution for its own request.
+
+### Pending notices
+
+An `ApprovalPendingNotice` is what the gate returns while a human decides, in place of
+a tool result: the request and action it concerns, the request revision it observed,
+the call it was returned to, the request deadline, the channels the review went to, and
+how the caller learns the outcome (`await_resolution`, or `poll_request` no earlier than
+`next_check_at`). A parent can receive one for a delegated call, so a waiting child is
+visible up the chain instead of ending as a timeout.
+
+A notice grants nothing. In an envelope, `pending_notices` must name this request's
+identities and action hash, go to the proposing call or one of its ancestors, repeat the
+request deadline exactly, be issued while the request was pending at a revision before it
+left pending, and name only channels the request used. A standalone notice is checked
+with `--record approval-pending-notice FILE`.
+
+### Escalation without new authority
+
+`requirements.escalation` names who is told when a request is still pending after
+`after_seconds`. The request lists each notice in `escalations` with its time, the
+notified actors, and the channel, and each has one `approval.escalated` audit event at
+the same time on the same channel. An escalation must come no earlier than the policy's
+delay, while the request is pending, and only to actors the policy names.
+
+Escalation only notifies. It does not extend the request deadline, and a notified actor
+decides only if separation of duties already makes them eligible.
+
+### Traceable policy refusals
+
+When the policy denies a request, `ApprovalRequest.policy_refusal` tells the proposing
+agent and its user why and where to go: the `evaluation_id` of the snapshot that
+decided, a `reason_code`, the denying `rule_ids`, a redacted `message`, the
+`policy_owner`, and a `next_step` (`revise_and_resubmit`, `contact_policy_owner`, or
+`do_not_retry`). The validator accepts it only on a `deny` outcome, for the same
+evaluation, with rule IDs that matched with a `deny` effect, and with a reason that
+agrees with the snapshot: `denied_by_rule` needs those rules, `no_matching_rule` an
+empty `matched_rules`, and `evaluator_unavailable` an unavailable evaluator. A refusal
+never reopens the request; a revised action is a new proposal.
+
+### Where a standing grant came from
+
+"Approve" and "always allow" are different decisions. An approving `ApprovalRecord`
+covers its own action unless it also carries `issued_grant`: the grant ID, start,
+expiry, scope, and use ceiling the approver explicitly granted. Only an `approved`
+decision, which is always a present human's, issues a grant, for the proposal's tenant, starting no
+earlier than the decision, and its granting human is the approver.
+
+An auto approval's `standing_grant.origin` names the request and approval that issued
+the grant, and `requirements.require_grant_origin` makes that mandatory. Across a set of
+envelopes the validator checks that the named approval issued that grant with the same
+terms and the same human, and that no grant is issued twice.
+
+### External policy decision points
+
+`ApprovalPolicySnapshot.evaluator` names the engine behind the outcome: `embedded`, or an
+`external_pdp` with its `protocol` (`authzen`, `opa`, `cedar`, `xacml`, or `custom`).
+When an external decision point answered, the snapshot keeps the `decision_id` it
+returned and `responded_at`, no later than `evaluated_at`, so a denial or an auto
+approval can be traced to that engine's own log. An unavailable decision point carries
+no answer, and the evaluator-unavailable rules above decide the outcome.
+
+### Superseded requests
+
+When a newer proposal replaces a pending one, the old request ends `cancelled` with
+`terminal_reason: "superseded"` and `superseded_by` naming the successor's request and
+proposal, so a reviewer who opens the old prompt is sent to the new one. Its
+`approval.cancelled` event carries the same reason, and a decision made at or after the
+supersession is refused. Across a set of envelopes the successor must be the named
+proposal, for the same tenant, proposed no earlier than the request it replaces.
+
+### Trace context
+
+`ApprovalRequest.trace_context` and each audit event's `trace_context` carry a W3C
+`traceparent` (and optional `tracestate`) for the agent run, so approval records can be
+joined to the run's distributed trace. Every audit event that carries one must share the
+request's trace ID, and an all-zero trace ID is invalid. Trace context is correlation
+data: it sits outside the hashed action, so the same action keeps its hash when it is
+re-proposed from another run, and it never stands in for authority.
+
+### Network egress
+
+`network.egress` is a built-in action type with a reference schema for opening
+outbound access from an agent's environment to one host and port. The host is a
+lowercase name or address without a scheme, path, or wildcard; the payload names the
+protocol, the environment it is opened from, whether it covers a `single_connection` or
+a `session`, and `max_duration_seconds`. HTTP methods may be limited for `http` and
+`https` only. The review target is the host, port, protocol, environment, and scope.
+
 ## WebAuthn approval proof
 
 `webauthn-es256` is an optional signature profile for authenticated web approvals.
@@ -428,7 +534,7 @@ match the exported range exactly.
 The repository's `action.yml` runs the same checks in GitHub Actions:
 
 ```yaml
-- uses: renezander030/agent-approval-gate@v3.2.0
+- uses: renezander030/agent-approval-gate@v3.3.0
   with:
     envelopes: |
       out/envelope.json
@@ -456,3 +562,6 @@ any implementation language.
 feedback, the MCP elicitation channel, and the reference action schemas.
 `tests/release-3.2.json` covers rule precedence, effect hints, standing grants, target
 preconditions, execution grants, and the local action schemas.
+`tests/release-3.3.json` covers relayed reviews, pending notices, escalation, policy
+refusals, issued grants, external decision points, supersession, trace context, and the
+`network.egress` schema.

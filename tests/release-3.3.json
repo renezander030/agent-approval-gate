@@ -1,0 +1,348 @@
+{
+  "positive": [
+    {
+      "name": "network.egress reference payload",
+      "schema": "schemas/actions/network.egress.schema.json",
+      "instance": "examples/actions/network.egress.json"
+    },
+    {
+      "name": "review relayed through the parent call",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/delegated-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "pending notice returned to the parent call",
+      "schema": "schemas/approval-pending-notice.schema.json",
+      "instance": "examples/approval-pending-notice.json"
+    },
+    {
+      "name": "escalated pending request",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/escalated-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "policy denial that names its rule and owner",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/policy-denied-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "human approval that also issues a standing grant",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/grant-issuing-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "auto approval naming the approval that issued its grant",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/grant-origin-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "policy outcome from an external decision point",
+      "schema": "schemas/approval-policy.schema.json",
+      "instance": "examples/approval-policy-external.json"
+    },
+    {
+      "name": "pending request superseded by a newer one",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/superseded-envelope.json",
+      "semantic": true
+    },
+    {
+      "name": "lifecycle joined to its agent run trace",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/traced-envelope.json",
+      "semantic": true
+    }
+  ],
+  "negative": [
+    {
+      "name": "relay through the proposing call itself",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/delegated-envelope.json",
+      "expect": "semantic",
+      "expect_error": "is not an ancestor of the proposing call",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/relay/0/call_id",
+          "value": "call_2026-04-28_7e19c5ad"
+        }
+      ]
+    },
+    {
+      "name": "relaying agent decides the request",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/delegated-envelope.json",
+      "expect": "semantic",
+      "expect_error": "was decided by a relaying agent",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/approvals/0/decided_by/identifier",
+          "value": "agent.support-orchestrator.prod"
+        }
+      ]
+    },
+    {
+      "name": "relay hop without a request relay",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/delegated-envelope.json",
+      "expect": "semantic",
+      "expect_error": "approval.relayed witnesses disagree",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/request/relay"
+        }
+      ]
+    },
+    {
+      "name": "pending notice that grants",
+      "schema": "schemas/approval-pending-notice.schema.json",
+      "instance": "examples/approval-pending-notice.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/status",
+          "value": "approved"
+        }
+      ]
+    },
+    {
+      "name": "polling notice without a next check",
+      "schema": "schemas/approval-pending-notice.schema.json",
+      "instance": "examples/approval-pending-notice.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/next_check_at"
+        }
+      ]
+    },
+    {
+      "name": "pending notice with a later deadline than its request",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/delegated-envelope.json",
+      "expect": "semantic",
+      "expect_error": "misstates the request deadline",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/pending_notices/0/expires_at",
+          "value": "2026-04-28T18:14:23Z"
+        }
+      ]
+    },
+    {
+      "name": "pending notice addressed outside the delegation chain",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/delegated-envelope.json",
+      "expect": "semantic",
+      "expect_error": "is addressed outside the delegation chain",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/pending_notices/1/recipient_call_id",
+          "value": "call_2026-04-28_unrelated"
+        }
+      ]
+    },
+    {
+      "name": "escalation before the policy delay",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/escalated-envelope.json",
+      "expect": "semantic",
+      "expect_error": "came before the policy's escalation delay",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/policy/requirements/escalation/after_seconds",
+          "value": 600
+        }
+      ]
+    },
+    {
+      "name": "escalation to an actor the policy does not name",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/escalated-envelope.json",
+      "expect": "semantic",
+      "expect_error": "notified an actor the policy does not name",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/escalations/0/notified_actor_ids/0",
+          "value": "someone-else@acme-corp.example"
+        }
+      ]
+    },
+    {
+      "name": "escalation to the policy channel",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/escalated-envelope.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/escalations/0/channel",
+          "value": "policy"
+        }
+      ]
+    },
+    {
+      "name": "policy refusal naming a rule that asked rather than denied",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/policy-denied-envelope.json",
+      "expect": "semantic",
+      "expect_error": "that did not deny",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/policy_refusal/rule_ids/0",
+          "value": "rule.email.external-recipient"
+        }
+      ]
+    },
+    {
+      "name": "policy refusal without an owner",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/policy-denied-envelope.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/request/policy_refusal/policy_owner"
+        }
+      ]
+    },
+    {
+      "name": "rejection that issues a standing grant",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/grant-issuing-envelope.json",
+      "expect": "semantic",
+      "expect_error": "without approving",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/approvals/0/decision",
+          "value": "rejected"
+        },
+        {
+          "op": "add",
+          "path": "/approvals/0/rejection_settlement",
+          "value": {
+            "state": "unresolved"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required grant origin missing",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/grant-origin-envelope.json",
+      "expect": "semantic",
+      "expect_error": "does not name the approval that issued it",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/approvals/0/standing_grant/origin"
+        }
+      ]
+    },
+    {
+      "name": "external decision point without a protocol",
+      "schema": "schemas/approval-policy.schema.json",
+      "instance": "examples/approval-policy-external.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/evaluator/protocol"
+        }
+      ]
+    },
+    {
+      "name": "superseded request without its successor",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/superseded-envelope.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/request/superseded_by"
+        }
+      ]
+    },
+    {
+      "name": "superseded request naming itself",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/superseded-envelope.json",
+      "expect": "semantic",
+      "expect_error": "names itself as its successor",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/superseded_by/request_id",
+          "value": "req_2026-04-27_6a2d8800"
+        }
+      ]
+    },
+    {
+      "name": "traceparent that is not W3C trace context",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/traced-envelope.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/trace_context/traceparent",
+          "value": "trace-4bf92f35"
+        }
+      ]
+    },
+    {
+      "name": "request trace with an all-zero trace ID",
+      "schema": "schemas/approval-envelope.schema.json",
+      "instance": "examples/traced-envelope.json",
+      "expect": "semantic",
+      "expect_error": "invalid trace ID",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request/trace_context/traceparent",
+          "value": "00-00000000000000000000000000000000-00f067aa0ba902b7-01"
+        }
+      ]
+    },
+    {
+      "name": "egress to a wildcard host",
+      "schema": "schemas/actions/network.egress.schema.json",
+      "instance": "examples/actions/network.egress.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/host",
+          "value": "*.npmjs.org"
+        }
+      ]
+    },
+    {
+      "name": "egress without a time bound",
+      "schema": "schemas/actions/network.egress.schema.json",
+      "instance": "examples/actions/network.egress.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/max_duration_seconds"
+        }
+      ]
+    }
+  ]
+}

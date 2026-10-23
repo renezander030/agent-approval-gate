@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.2.0/schemas/proposed-action.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.3.0/schemas/proposed-action.schema.json",
   "title": "ProposedAction",
   "description": "An immutable, serializable action draft. The RFC 8785 SHA-256 digest of this complete document is the action_hash carried through approval and dispatch.",
   "type": "object",
@@ -52,7 +52,8 @@
         "api.call",
         "n8n.trigger_workflow",
         "shell.exec",
-        "file.write"
+        "file.write",
+        "network.egress"
       ]
     },
     "payload_schema": {
@@ -151,6 +152,15 @@
       },
       "then": {
         "properties": {"payload": {"$ref": "actions/file.write.schema.json"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"action_type": {"const": "network.egress"}},
+        "required": ["action_type"]
+      },
+      "then": {
+        "properties": {"payload": {"$ref": "actions/network.egress.schema.json"}}
       }
     }
   ]
