@@ -2,8 +2,8 @@
 
 ## Versioning
 
-The release version and every schema's `schema_version` are `3.3.0`. Schema `$id`
-values resolve through the immutable `v3.3.0` tag. A consumer may cache schemas by
+The release version and every schema's `schema_version` are `3.4.0`. Schema `$id`
+values resolve through the immutable `v3.4.0` tag. A consumer may cache schemas by
 `$id`; it must not replace a cached release schema with content from `main`.
 
 - Patch releases may clarify descriptions and add compatible examples or tests.
@@ -396,6 +396,47 @@ protocol, the environment it is opened from, whether it covers a `single_connect
 a `session`, and `max_duration_seconds`. HTTP methods may be limited for `http` and
 `https` only. The review target is the host, port, protocol, environment, and scope.
 
+## Version 3.4 additions
+
+### Permission Protocol receipts
+
+`pp-receipt-ed25519` lets an external authorization service hold the signing key. A
+gate that routes a held action to [Permission Protocol](https://permissionprotocol.com)
+sends the execute-lane request with `constraints.idempotencyKey` set to
+
+```text
+agent-approval-gate:<request_id>:<request_revision>:<action_hash>
+```
+
+using the pending revision the approver sees and the effective `action_hash`. The
+issuer signs that value as `idemKey` and the request itself as `requestJson`, so the
+receipt is bound to the exact action without the issuer knowing this contract.
+
+The signature entry keeps the issuer's exact signed bytes (`payload_bytes`), their
+`signed_payload_hash`, the Ed25519 signature as `value`, the issuer's 32-byte
+`issuer_public_key`, and `key_evidence`: the RFC 8785/SHA-256 digest of
+`{"issuer", "key_id", "public_key"}` with the URI of the key set the verifier retained.
+The validator then:
+
+1. verifies the receipt as the issuer's specification orders it (permission-protocol/receipt-spec
+   `SPEC.md` 6.2): payload digest, `signatureKeyId`, Ed25519 over the 32-byte digest,
+   and the `jcs_v2` canonical form and field list; any other canonicalization is
+   reported as unsupported, not as tampering;
+2. requires the signed `id`, a `status` matching the decision (`APPROVED` for
+   `approved`, `DENIED` for `rejected`), and `scope: production`;
+3. requires `idemKey` and the signed request's `constraints.idempotencyKey` to equal
+   the binding above;
+4. requires a human decider (`deciderId` `user:…`) who authenticated with a session,
+   `attributionConfidence` `credentialed` or `heuristic`, the web channel,
+   `evidence_ref` `permission-protocol-receipt:<receipt_id>`, and a receipt signed no
+   later than `recorded_at`.
+
+The proof is independent of the gate's platform only when the verifier's key set copy
+comes from the issuer, not from the platform under dispute. A receipt proves the
+decision, not that the action ran; the dispatch record still does that. `jcs_v3`
+receipts commit `idemKey` inside a salted request commitment and are not accepted by
+this profile yet.
+
 ## WebAuthn approval proof
 
 `webauthn-es256` is an optional signature profile for authenticated web approvals.
@@ -534,7 +575,7 @@ match the exported range exactly.
 The repository's `action.yml` runs the same checks in GitHub Actions:
 
 ```yaml
-- uses: renezander030/agent-approval-gate@v3.3.0
+- uses: renezander030/agent-approval-gate@v3.4.0
   with:
     envelopes: |
       out/envelope.json

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.3.0/schemas/actions/api.call.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.4.0/schemas/actions/api.call.schema.json",
   "title": "api.call payload",
   "description": "Reference payload contract for a dispatcher-owned HTTP call. The agent names a registered operation, never a URL or credential; the dispatcher resolves the endpoint and authentication.",
   "x-action-type": "api.call",

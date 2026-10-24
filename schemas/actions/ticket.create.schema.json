@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.3.0/schemas/actions/ticket.create.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.4.0/schemas/actions/ticket.create.schema.json",
   "title": "ticket.create payload",
   "description": "Reference payload contract for an issue or ticket creation dispatcher.",
   "x-action-type": "ticket.create",

@@ -1,0 +1,22 @@
+{
+  "description": "Snapshot of https://app.permissionprotocol.com/.well-known/permission-protocol/keys.json taken 2026-09-08. Live verifiers should fetch the current set; this copy exists so the live vector verifies offline in CI.",
+  "issuer": "https://app.permissionprotocol.com",
+  "keys": [
+    {
+      "key_id": "pp_key_default",
+      "alg": "ed25519",
+      "public_key_b64": "wJcxaKl9Mn3jXlE+JhdxmXZkcS6SyMiy7HoVMVLyF7g=",
+      "status": "active",
+      "created_at": "2026-02-11T18:33:43.666Z",
+      "revoked_at": null
+    },
+    {
+      "key_id": "pp_key_348f56d61d0deab4",
+      "alg": "ed25519",
+      "public_key_b64": "DrIEo9bhRbEZQGFxEujYS7xQ+DkG7VhNkWJ6fOZpRQQ=",
+      "status": "active",
+      "created_at": "2026-03-10T17:44:20.810Z",
+      "revoked_at": null
+    }
+  ]
+}

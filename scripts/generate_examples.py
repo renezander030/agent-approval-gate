@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import sys
@@ -12,8 +13,11 @@ from typing import Any
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integrations" / "permission_protocol"))
+import adapter as permission_protocol  # noqa: E402
 from validate_contracts import (  # noqa: E402
     digest as digest_value, encode_base64url as base64url, execution_grant_manifest,
 )
@@ -570,7 +574,7 @@ def main() -> None:
             event["references"]["audit_snapshot_id"] = audit_snapshot["snapshot_id"]
 
     envelope = {
-        "schema_version": "3.3.0",
+        "schema_version": "3.4.0",
         "captured_at": "2026-04-28T09:14:35Z",
         "proposal": proposal,
         "validations": [validation],
@@ -588,6 +592,94 @@ def main() -> None:
     write("audit-snapshot.json", audit_snapshot)
     write("approval-envelope.json", envelope)
     lifecycle_examples(envelope)
+    permission_protocol_example(envelope)
+
+
+def permission_protocol_example_key() -> Ed25519PrivateKey:
+    return Ed25519PrivateKey.from_private_bytes(
+        hashlib.sha256(b"agent-approval-gate permission-protocol example").digest()
+    )
+
+
+def permission_protocol_example(envelope: dict[str, Any]) -> None:
+    """A jcs_v2 receipt from a test issuer, recorded through the reference adapter."""
+    proposal, request = envelope["proposal"], envelope["request"]
+    approval, review_snapshot = envelope["approvals"][0], envelope["review_snapshots"][-1]
+    issuer = "https://app.permissionprotocol.example"
+    key_id = "pp-example-2026-q2"
+    private_key = permission_protocol_example_key()
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw,
+    )
+    key_set = {
+        "issuer": issuer,
+        "keys": [{
+            "key_id": key_id, "alg": "ed25519",
+            "public_key_b64": base64.b64encode(public_key).decode("ascii"),
+            "status": "active", "created_at": "2026-04-01T00:00:00.000Z", "revoked_at": None,
+        }],
+    }
+    body = permission_protocol.execute_request(
+        proposal, request["request_id"], approval["request_revision"], approval["action_hash"],
+    )
+    body["tenantId"] = "co_acme_example"
+    input_hash = digest_value(body)
+    body["hashes"] = {"inputHash": input_hash}
+    request_json = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    payload = {
+        "id": "cmexampleppreceipt0000000001",
+        "companyId": body["tenantId"],
+        "idemKey": body["constraints"]["idempotencyKey"],
+        "agentId": body["actor"]["agentId"],
+        "runId": body["actor"]["runId"],
+        "requestJson": request_json,
+        "inputHash": input_hash,
+        "status": "APPROVED",
+        "riskTier": "C_EXECUTE_WITH_APPROVAL",
+        "policyVersion": "pol_v1_hardcoded",
+        "reasonCodes": json.dumps(["PRODUCTION_REQUIRES_APPROVAL"]),
+        "summary": "Production environment requires human approval",
+        "receiptVersion": 2,
+        "canonicalization": "jcs_v2",
+        "signatureAlg": "ed25519",
+        "signatureKeyId": key_id,
+        "expiresAt": "2026-04-28T10:14:30.000Z",
+        "createdAt": "2026-04-28T09:14:30.000Z",
+        "deciderId": "user:usr_example_rene",
+        "deciderDisplay": "rene-example",
+        "deciderAuthMethod": "session_stepup_webauthn",
+        "resolutionType": "allow_once",
+        "attributionConfidence": "credentialed",
+        "scope": "production",
+    }
+    payload_bytes = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    payload_digest = hashlib.sha256(payload_bytes).digest()
+    artifact = {
+        "receipt_id": payload["id"],
+        "key_id": key_id,
+        "alg": "ed25519",
+        "signed_payload_hash": payload_digest.hex(),
+        "signature_b64": base64.b64encode(private_key.sign(payload_digest)).decode("ascii"),
+        "payload_bytes_b64": base64.b64encode(payload_bytes).decode("ascii"),
+    }
+    record = permission_protocol.approval_record(
+        artifact, key_set,
+        approval_id=approval["approval_id"],
+        request_id=request["request_id"],
+        request_revision=approval["request_revision"],
+        proposal_id=proposal["proposal_id"],
+        action_hash=approval["action_hash"],
+        payload_hash=approval["payload_hash"],
+        review_snapshot=review_snapshot,
+        approver={key: approval["decided_by"][key] for key in ("identifier", "display_name", "roles")},
+        recorded_at=approval["recorded_at"],
+        key_set_uri="urn:acme:permission-protocol-keys:2026-04-28",
+        policy_evaluation_id=approval["policy_evaluation_id"],
+        comment="Reviewed in Permission Protocol and signed with a passkey.",
+    )
+    write("permission-protocol-key-set.json", key_set)
+    write("permission-protocol-artifact.json", {"artifact": artifact})
+    write("permission-protocol-approval-record.json", record)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,26 @@
 # Changelog
 
+## 3.4.0
+
+An approval whose signing key the gate's own platform does not hold.
+
+### Added
+
+- `pp-receipt-ed25519`: an `ApprovalRecord` signature that carries a Permission Protocol
+  authority receipt (`jcs_v2`, Ed25519 over the SHA-256 of the canonical payload). The
+  validator checks the receipt offline as the issuer's specification orders it, then
+  checks that the receipt's signed `idemKey` and request bind the approval's request,
+  pending revision and effective `action_hash`, that a session-authenticated human
+  decided, that the signed decision matches, and that the receipt is the approval's
+  authentication evidence.
+- `permission_protocol_key` evidence kind: the digest of the issuer, key id and public
+  key the verifier retained.
+- `integrations/permission_protocol/adapter.py`: a reference adapter that builds the
+  bound execute-lane request and turns a receipt artifact into an `ApprovalRecord`.
+- `tests/permission-protocol/`: the issuer's published receipt vectors, including one
+  live production receipt, which the verifier must accept, and a tampered one it must
+  refuse.
+
 ## 3.3.0
 
 Approvals that stay legible while they wait, travel through delegated agents, and end

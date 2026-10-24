@@ -1,0 +1,110 @@
+{
+  "positive": [
+    {
+      "name": "approval backed by a Permission Protocol receipt",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/permission-protocol-approval-record.json",
+      "signature": true
+    }
+  ],
+  "negative": [
+    {
+      "name": "receipt bound to another action",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/permission-protocol-approval-record.json",
+      "expect": "semantic",
+      "signature": true,
+      "expect_error": "idemKey does not bind this request and action_hash",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/action_hash",
+          "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "name": "receipt bound to another request revision",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/permission-protocol-approval-record.json",
+      "expect": "semantic",
+      "signature": true,
+      "expect_error": "idemKey does not bind this request and action_hash",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/request_revision",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "name": "receipt key evidence names another key",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/permission-protocol-approval-record.json",
+      "expect": "semantic",
+      "signature": true,
+      "expect_error": "key evidence does not bind the issuer key",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/signatures/0/permission_protocol/key_evidence/digest",
+          "value": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ]
+    },
+    {
+      "name": "receipt recorded on another channel",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/permission-protocol-approval-record.json",
+      "expect": "semantic",
+      "signature": true,
+      "expect_error": "approval must use the web channel",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/channel",
+          "value": "email"
+        }
+      ]
+    },
+    {
+      "name": "receipt profile on another algorithm",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/permission-protocol-approval-record.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/signatures/0/algorithm",
+          "value": "ed25519"
+        }
+      ]
+    },
+    {
+      "name": "receipt profile without its receipt",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/permission-protocol-approval-record.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "remove",
+          "path": "/signatures/0/permission_protocol"
+        }
+      ]
+    },
+    {
+      "name": "receipt under an unsupported canonicalization",
+      "schema": "schemas/approval-record.schema.json",
+      "instance": "examples/permission-protocol-approval-record.json",
+      "expect": "schema",
+      "operations": [
+        {
+          "op": "replace",
+          "path": "/signatures/0/permission_protocol/canonicalization",
+          "value": "jcs_v3"
+        }
+      ]
+    }
+  ]
+}

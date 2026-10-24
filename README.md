@@ -53,7 +53,7 @@ Nine boundaries make the gate real:
 If the agent still has the side-effect credential, the approval path remains optional
 from the agent's point of view.
 
-## Contracts in v3.3.0
+## Contracts in v3.4.0
 
 | Contract | Purpose |
 |---|---|
@@ -72,7 +72,7 @@ from the agent's point of view.
 | [`approval-envelope.schema.json`](schemas/approval-envelope.schema.json) | Portable bundle plus cross-contract profile for a completed lifecycle |
 | [`actions/*.schema.json`](schemas/actions/) | Strict payload references for `email.send`, `crm.update_record`, `ticket.create`, `db.update_row`, `api.call`, `n8n.trigger_workflow`, `shell.exec`, `file.write`, and `network.egress`, each naming the fields the approver must see as the target |
 
-Schema IDs are pinned to the `v3.3.0` release. Pin a released ID in production; do not
+Schema IDs are pinned to the `v3.4.0` release. Pin a released ID in production; do not
 resolve schemas from the mutable default branch.
 
 ## Quick start
@@ -160,7 +160,7 @@ action per idempotency key. Audit exports verify offline, including a range that
 continues from a retained checkpoint hash. In CI, use the bundled action:
 
 ```yaml
-- uses: renezander030/agent-approval-gate@v3.3.0
+- uses: renezander030/agent-approval-gate@v3.4.0
   with:
     envelopes: out/envelope.json
 ```
@@ -192,6 +192,18 @@ python3 -m venv .venv
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
+## Optional external signer: Permission Protocol
+
+An approval may carry a `pp-receipt-ed25519` signature: an authority receipt from
+[Permission Protocol](https://permissionprotocol.com), whose signing key sits with the
+issuer rather than with the platform running the gate. The gate sends the held action
+with an idempotency key that binds the request, its pending revision and the
+`action_hash`; the issuer signs it into the receipt, and the validator checks the
+receipt offline against the issuer's published key and that binding. The verifier
+accepts the issuer's own published vectors, including a live production receipt. See
+[`integrations/permission_protocol/`](integrations/permission_protocol/) and
+[`examples/permission-protocol-approval-record.json`](examples/permission-protocol-approval-record.json).
+
 ## n8n reference
 
 [`examples/n8n-approval-workflow.json`](examples/n8n-approval-workflow.json) is an
@@ -219,7 +231,8 @@ Those are trust-boundary components, not Code-node snippets. See
 - Not coupled to one LLM, orchestrator, approval channel, or protocol.
 - Not a prompt-injection filter, rate limiter, budget engine, or ACL synchronization
   service.
-- Not third-party-verifiable proof when the platform itself holds the signing key.
+- Not third-party-verifiable proof when the platform itself holds the signing key;
+  use an external signer such as a Permission Protocol receipt for that.
 - Not a WebAuthn UI, credential-registration service, or trust-anchor store.
 
 See [`docs/architecture.md`](docs/architecture.md) for the threat model,

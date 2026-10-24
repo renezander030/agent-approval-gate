@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.3.0/schemas/common.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.4.0/schemas/common.schema.json",
   "title": "Agent Approval Gate common definitions",
   "$defs": {
     "schema_version": {
       "type": "string",
-      "const": "3.3.0"
+      "const": "3.4.0"
     },
     "identifier": {
       "type": "string",
@@ -89,7 +89,7 @@
       "properties": {
         "algorithm": {
           "type": "string",
-          "enum": ["hmac-sha256", "ed25519", "webauthn-es256"]
+          "enum": ["hmac-sha256", "ed25519", "webauthn-es256", "pp-receipt-ed25519"]
         },
         "key_id": {"type": "string", "minLength": 1, "maxLength": 1366},
         "value": {"type": "string", "pattern": "^[A-Za-z0-9_-]{32,}$"},
@@ -136,6 +136,36 @@
               "properties": {"kind": {"const": "webauthn_registration"}}
             }
           }
+        },
+        "permission_protocol": {
+          "type": "object",
+          "required": [
+            "receipt_id",
+            "issuer",
+            "canonicalization",
+            "payload_bytes",
+            "signed_payload_hash",
+            "issuer_public_key",
+            "key_evidence"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "receipt_id": {"type": "string", "minLength": 1, "maxLength": 256},
+            "issuer": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 2048,
+              "pattern": "^https://"
+            },
+            "canonicalization": {"const": "jcs_v2"},
+            "payload_bytes": {"$ref": "#/$defs/base64url"},
+            "signed_payload_hash": {"$ref": "#/$defs/digest"},
+            "issuer_public_key": {"$ref": "#/$defs/base64url", "minLength": 43, "maxLength": 43},
+            "key_evidence": {
+              "$ref": "#/$defs/evidence_reference",
+              "properties": {"kind": {"const": "permission_protocol_key"}}
+            }
+          }
         }
       },
       "allOf": [
@@ -155,6 +185,14 @@
               ]
             }
           }
+        },
+        {
+          "if": {
+            "properties": {"algorithm": {"const": "pp-receipt-ed25519"}},
+            "required": ["algorithm"]
+          },
+          "then": {"required": ["permission_protocol"]},
+          "else": {"not": {"required": ["permission_protocol"]}}
         }
       ]
     },
@@ -281,6 +319,7 @@
             "policy",
             "provider_record",
             "reconciliation",
+            "permission_protocol_key",
             "webauthn_registration"
           ]
         },

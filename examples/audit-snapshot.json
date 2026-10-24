@@ -1,5 +1,5 @@
 {
-  "schema_version": "3.3.0",
+  "schema_version": "3.4.0",
   "snapshot_id": "audit_snapshot_2026-04-28_1df41000",
   "stream_id": "stream_prop_b3f1a2c4",
   "captured_at": "2026-04-28T09:14:35Z",
@@ -7,6 +7,6 @@
   "entry_count": 9,
   "first_sequence": 1,
   "last_sequence": 9,
-  "events_digest": "sha256:59fc57abe57272d997d351b74dc0945b9968c98d3680bb20eaf9a12cddbccde7",
-  "root_event_hash": "sha256:1c977fb1307d6f8841682bbe8909774615060e3b271718caa29ba2d8f9fff6d9"
+  "events_digest": "sha256:c85fa91c0fcd95303ce6556b5c7a6057c6347f5abe417e65e4db6324b974d08a",
+  "root_event_hash": "sha256:883be772d52ff9a8011d7a8e98b249f86500f56a4d7a578a869e3fc8984ab387"
 }
