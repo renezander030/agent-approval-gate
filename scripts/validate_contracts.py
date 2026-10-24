@@ -21,6 +21,7 @@ import rfc8785
 from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
@@ -223,6 +224,145 @@ def webauthn_signature_errors(approval: dict[str, Any]) -> list[str]:
         except (InvalidSignature, UnsupportedAlgorithm, TypeError, ValueError) as error:
             errors.append(f"{prefix} cryptographic verification failed: {error}")
     return errors
+
+
+# Permission Protocol receipt format, jcs_v2 (permission-protocol/receipt-spec SPEC.md 3.1, 4).
+PP_JCS_V2_FIELDS = frozenset({
+    "id", "companyId", "idemKey", "agentId", "runId", "requestJson", "inputHash",
+    "status", "riskTier", "policyVersion", "reasonCodes", "summary", "receiptVersion",
+    "canonicalization", "signatureAlg", "signatureKeyId", "expiresAt", "createdAt",
+    "deciderId", "deciderDisplay", "deciderAuthMethod", "resolutionType",
+    "attributionConfidence", "scope",
+})
+PP_JCS_V2_REQUIRED = PP_JCS_V2_FIELDS - {
+    "runId", "riskTier", "policyVersion", "reasonCodes", "summary",
+    "deciderAuthMethod", "resolutionType",
+}
+PP_DECISIONS = {"approved": "APPROVED", "rejected": "DENIED"}
+
+
+def permission_protocol_binding(request_id: str, request_revision: int, action_hash: str) -> str:
+    """The idempotency key a gate sends with the request, which the receipt signs as idemKey."""
+    return f"agent-approval-gate:{request_id}:{request_revision}:{action_hash}"
+
+
+def permission_protocol_canonical_bytes(payload: dict[str, Any]) -> bytes:
+    return json.dumps(
+        payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True,
+    ).encode("utf-8")
+
+
+def permission_protocol_receipt_errors(
+    payload_bytes: bytes, signed_payload_hash: str, key_id: str,
+    signature_value: bytes, public_key: bytes,
+) -> tuple[list[str], dict[str, Any] | None]:
+    """Verify one receipt as SPEC.md 6.2 orders it: digest, key id, signature, canonical form."""
+    digest_bytes = hashlib.sha256(payload_bytes).digest()
+    if "sha256:" + digest_bytes.hex() != signed_payload_hash:
+        return ["payload bytes do not match signed_payload_hash"], None
+    try:
+        payload = strict_json_loads(payload_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as error:
+        return [f"payload is not JSON: {error}"], None
+    if not isinstance(payload, dict):
+        return ["payload is not a JSON object"], None
+    if payload.get("signatureKeyId") != key_id:
+        return ["key_id does not match the signed signatureKeyId"], None
+    if len(signature_value) != 64 or len(public_key) != 32:
+        return ["signature or issuer key has the wrong length for Ed25519"], None
+    try:
+        Ed25519PublicKey.from_public_bytes(public_key).verify(signature_value, digest_bytes)
+    except InvalidSignature:
+        return ["Ed25519 signature does not verify over the payload digest"], None
+    if payload.get("canonicalization") != "jcs_v2":
+        return [f"canonicalization {payload.get('canonicalization')!r} is not supported by this profile"], None
+    errors: list[str] = []
+    if permission_protocol_canonical_bytes(payload) != payload_bytes:
+        errors.append("payload bytes are not the jcs_v2 canonical form")
+    unknown = sorted(set(payload) - PP_JCS_V2_FIELDS)
+    if unknown:
+        errors.append("payload carries fields outside jcs_v2: " + ", ".join(unknown))
+    missing = sorted(PP_JCS_V2_REQUIRED - set(payload))
+    if missing:
+        errors.append("payload lacks jcs_v2 fields: " + ", ".join(missing))
+    if any(value is None for value in payload.values()):
+        errors.append("payload carries a null field")
+    if payload.get("signatureAlg") != "ed25519" or payload.get("receiptVersion") != 2:
+        errors.append("payload is not an ed25519 receipt of version 2")
+    return errors, payload
+
+
+def permission_protocol_signature_errors(approval: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    for signature in approval.get("signatures", []):
+        if signature.get("algorithm") != "pp-receipt-ed25519":
+            continue
+        profile = signature["permission_protocol"]
+        receipt_id = profile["receipt_id"]
+        prefix = f"Permission Protocol receipt {receipt_id}"
+        key_binding = {
+            "issuer": profile["issuer"],
+            "key_id": signature["key_id"],
+            "public_key": profile["issuer_public_key"],
+        }
+        if profile["key_evidence"]["digest"] != digest(key_binding):
+            errors.append(f"{prefix} key evidence does not bind the issuer key")
+        try:
+            payload_bytes = decode_base64url(profile["payload_bytes"])
+            signature_value = decode_base64url(signature["value"])
+            public_key = decode_base64url(profile["issuer_public_key"])
+        except (binascii.Error, ValueError, TypeError) as error:
+            errors.append(f"{prefix} contains invalid base64url: {error}")
+            continue
+        receipt_errors, payload = permission_protocol_receipt_errors(
+            payload_bytes, profile["signed_payload_hash"], signature["key_id"],
+            signature_value, public_key,
+        )
+        errors.extend(f"{prefix} {error}" for error in receipt_errors)
+        if payload is None:
+            continue
+
+        if payload.get("id") != receipt_id:
+            errors.append(f"{prefix} receipt_id does not match the signed id")
+        if payload.get("status") != PP_DECISIONS.get(approval["decision"]):
+            errors.append(f"{prefix} signed status does not match the {approval['decision']} decision")
+        if payload.get("scope") != "production":
+            errors.append(f"{prefix} is not a production receipt")
+        binding = permission_protocol_binding(
+            approval["request_id"], approval["request_revision"], approval["action_hash"],
+        )
+        if payload.get("idemKey") != binding:
+            errors.append(f"{prefix} idemKey does not bind this request and action_hash")
+        try:
+            request_json = strict_json_loads(payload.get("requestJson", ""))
+        except ValueError:
+            request_json = None
+        constraints = request_json.get("constraints") if isinstance(request_json, dict) else None
+        if not isinstance(constraints, dict) or constraints.get("idempotencyKey") != binding:
+            errors.append(f"{prefix} signed request does not carry the binding as its idempotency key")
+
+        actor = approval["decided_by"]
+        authentication = actor["authentication"]
+        if actor["kind"] != "human" or not str(payload.get("deciderId", "")).startswith("user:"):
+            errors.append(f"{prefix} does not name a human decider")
+        if payload.get("attributionConfidence") not in {"credentialed", "heuristic"}:
+            errors.append(f"{prefix} decider attribution is not credentialed or heuristic")
+        if not str(payload.get("deciderAuthMethod", "")).startswith("session"):
+            errors.append(f"{prefix} decider did not authenticate with a session")
+        if authentication.get("evidence_ref") != f"permission-protocol-receipt:{receipt_id}":
+            errors.append(f"{prefix} is not the approval's authentication evidence")
+        if approval["channel"] != "web":
+            errors.append(f"{prefix} approval must use the web channel")
+        try:
+            if parse_time(payload["createdAt"]) > parse_time(approval["recorded_at"]):
+                errors.append(f"{prefix} was signed after the approval was recorded")
+        except (KeyError, TypeError, ValueError):
+            errors.append(f"{prefix} createdAt is not a timestamp")
+    return errors
+
+
+def approval_signature_errors(approval: dict[str, Any]) -> list[str]:
+    return webauthn_signature_errors(approval) + permission_protocol_signature_errors(approval)
 
 
 @lru_cache(maxsize=1)
@@ -1181,7 +1321,7 @@ def semantic_errors(envelope: dict[str, Any], schema_files: dict[str, Path] | No
     ]
     effective_hashes: dict[str, str] = {}
     for approval in approvals:
-        errors.extend(webauthn_signature_errors(approval))
+        errors.extend(approval_signature_errors(approval))
         if approval["proposal_id"] != proposal["proposal_id"]:
             errors.append(f"approval {approval['approval_id']} points at another proposal")
         if approval["request_id"] != request["request_id"]:
@@ -1708,7 +1848,7 @@ def validate_repository() -> list[str]:
         if "/main/" in identifier:
             failures.append(f"{path}: $id points at mutable main")
 
-    for corpus_path in ("tests/conformance.json", "tests/adversarial.json", "tests/hardening.json", "tests/release-3.1.json", "tests/release-3.2.json", "tests/release-3.3.json"):
+    for corpus_path in ("tests/conformance.json", "tests/adversarial.json", "tests/hardening.json", "tests/release-3.1.json", "tests/release-3.2.json", "tests/release-3.3.json", "tests/release-3.4.json"):
         corpus = load(corpus_path)
         for vector in corpus["positive"]:
             validator = validator_for(vector["schema"], schemas, registry)
@@ -1731,10 +1871,10 @@ def validate_repository() -> list[str]:
                     f"{corpus_path} positive {vector['name']}: {error}"
                     for error in semantic_errors(instance)
                 )
-            if vector.get("webauthn") and not vector_has_schema_errors:
+            if (vector.get("webauthn") or vector.get("signature")) and not vector_has_schema_errors:
                 failures.extend(
                     f"{corpus_path} positive {vector['name']}: {error}"
-                    for error in webauthn_signature_errors(instance)
+                    for error in approval_signature_errors(instance)
                 )
 
         for vector in corpus["negative"]:
@@ -1755,8 +1895,8 @@ def validate_repository() -> list[str]:
                 )
                 continue
             vector_errors = (
-                webauthn_signature_errors(instance)
-                if vector.get("webauthn")
+                approval_signature_errors(instance)
+                if vector.get("webauthn") or vector.get("signature")
                 else semantic_errors(instance)
             )
             if not vector_errors:
@@ -1780,7 +1920,7 @@ RECORD_SCHEMAS = {
 
 # Rules a standalone record can prove without the rest of its lifecycle.
 RECORD_SELF_CHECKS = {
-    "approval-record": webauthn_signature_errors,
+    "approval-record": approval_signature_errors,
     "dispatch-record": execution_grant_errors,
     "approval-policy": policy_snapshot_errors,
     "approval-request": lambda record: policy_snapshot_errors(record["policy"]) + policy_refusal_errors(record),

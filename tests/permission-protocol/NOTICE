@@ -1,0 +1,7 @@
+The receipt vectors and key sets in this folder are copied unchanged from
+permission-protocol/receipt-spec (https://github.com/permission-protocol/receipt-spec),
+test-vectors/ at commit 47a03c413d864378488dda467bd9e5dfdb67fe30 (2026-10-20).
+They are licensed under the Apache License 2.0; see LICENSE in this folder.
+
+live-deploy-gate-approve.json is a production receipt the hosted service issued on
+2026-08-21, verified with live-keys.json, a dated snapshot of the issuer's key set.
