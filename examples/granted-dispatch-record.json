@@ -1,5 +1,5 @@
 {
-  "schema_version": "3.3.0",
+  "schema_version": "3.4.0",
   "dispatch_id": "dispatch_2026-04-28_4ad31000",
   "proposal_id": "prop_2026-04-28_b3f1a2c4",
   "request_id": "req_2026-04-28_6a2d8800",
@@ -7,7 +7,7 @@
     "approval_2026-04-28_f9821000"
   ],
   "authority_snapshot_id": "authority_2026-04-28_9bc31000",
-  "action_hash": "sha256:e67cf5b14a0ecf2b2a86aa1f71be55d5524e962e91eba67edcc8cc840197cf11",
+  "action_hash": "sha256:fa91547ede90b5e71af350eeed3be5272dc40be522a84a6e32045ef8f4db1e64",
   "idempotency_key": "idem_email_ZD-48211_reply_01",
   "attempt": 1,
   "max_attempts": 3,
@@ -25,7 +25,7 @@
     ]
   },
   "execution_grant": {
-    "digest": "sha256:1202ba955f40e3fdd7b88df1e3cea67c1ad2a97cd1ac98e63cb81857fa17337f",
+    "digest": "sha256:bf82381bda36c779d39ef693b8805e0738f105fa0ce03d22637eea19739348e5",
     "issued_at": "2026-04-28T09:14:33Z"
   }
 }

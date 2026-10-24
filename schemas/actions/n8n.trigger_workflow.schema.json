@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.3.0/schemas/actions/n8n.trigger_workflow.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.4.0/schemas/actions/n8n.trigger_workflow.schema.json",
   "title": "n8n.trigger_workflow payload",
   "description": "Reference payload contract for triggering a registered n8n workflow. The dispatcher maps the workflow ID to its webhook and credential.",
   "x-action-type": "n8n.trigger_workflow",

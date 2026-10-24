@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.3.0/schemas/actions/network.egress.schema.json",
+  "$id": "https://raw.githubusercontent.com/renezander030/agent-approval-gate/v3.4.0/schemas/actions/network.egress.schema.json",
   "title": "network.egress payload",
   "description": "Reference payload contract for opening outbound network access from an agent's environment to one named host and port, for one connection or one session and a bounded time. The approver sees the destination together with the environment it is opened from and how long it stays open. Wildcard hosts are not a single destination and are refused.",
   "x-action-type": "network.egress",

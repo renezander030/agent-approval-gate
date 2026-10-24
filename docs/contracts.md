@@ -2,8 +2,8 @@
 
 ## Versioning
 
-The release version and every schema's `schema_version` are `3.3.0`. Schema `$id`
-values resolve through the immutable `v3.3.0` tag. A consumer may cache schemas by
+The release version and every schema's `schema_version` are `3.4.0`. Schema `$id`
+values resolve through the immutable `v3.4.0` tag. A consumer may cache schemas by
 `$id`; it must not replace a cached release schema with content from `main`.
 
 - Patch releases may clarify descriptions and add compatible examples or tests.
@@ -534,7 +534,7 @@ match the exported range exactly.
 The repository's `action.yml` runs the same checks in GitHub Actions:
 
 ```yaml
-- uses: renezander030/agent-approval-gate@v3.3.0
+- uses: renezander030/agent-approval-gate@v3.4.0
   with:
     envelopes: |
       out/envelope.json

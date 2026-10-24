@@ -570,7 +570,7 @@ def main() -> None:
             event["references"]["audit_snapshot_id"] = audit_snapshot["snapshot_id"]
 
     envelope = {
-        "schema_version": "3.3.0",
+        "schema_version": "3.4.0",
         "captured_at": "2026-04-28T09:14:35Z",
         "proposal": proposal,
         "validations": [validation],
