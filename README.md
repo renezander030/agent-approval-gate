@@ -75,6 +75,31 @@ from the agent's point of view.
 Schema IDs are pinned to the `v3.4.0` release. Pin a released ID in production; do not
 resolve schemas from the mutable default branch.
 
+## Coming from OpenAI dots
+
+OpenAI's [dots](https://openai.com/index/introducing-dots/) (always-on agents in
+ChatGPT, September 2026) give each kind of action one of four behaviors through
+Custom Rules, on top of built-in requirements that cannot be overridden
+([Help Center](https://help.openai.com/en/articles/20001529-dots-privacy-security-and-safety-faqs)).
+The same decisions in contract terms:
+
+| dots behavior | In the contracts |
+|---|---|
+| Take action without asking | `ApprovalPolicySnapshot.outcome: auto_approve` under `allow_auto_approval: true`; the `ApprovalRecord` is `auto_approved` by a policy actor |
+| Take action if pre-approved | `auto_approve` that cites a human's [standing grant](examples/standing-grant-envelope.json) with its scope, `expires_at` and `max_uses`; `requirements.require_standing_grant` makes the grant mandatory |
+| Ask before taking action | `require_approval`: a durable `ApprovalRequest`, the `ReviewSnapshot` the person saw, and a human `ApprovalRecord` |
+| Hand off to you | `deny` for the agent, with `agent_feedback` saying the person completes it; nothing reaches the dispatcher. The contracts have no separate hand-off state |
+| Built-in requirements (a delete or install asks each time) | `requirements.human_required_effects` on the action's `effects` hints: no policy outcome or standing grant can auto-approve a `destructive` or `open_world` action. A `deny` rule wins over every other rule |
+| An approval covers one action | The request is consumed exactly once, and its digest binds the arguments, target and idempotency key |
+| Auto-review sits outside the agent's reach | The dispatcher holds the side-effect credential and rechecks authority at dispatch; an `external_pdp` evaluator keeps the policy decision out of the agent's runtime |
+
+What the contracts add to the user-facing model dots publishes: the reviewed
+content is bound by hash, the decision names the policy revision it used, an
+unknown provider outcome is kept as unknown rather than retried, and the audit
+stream exports with a completeness manifest. dots itself is a hosted product;
+the contracts are for teams that run their own agents and need the same
+decisions as evidence.
+
 ## Quick start
 
 1. Validate the proposal and payload, record every required check in a passed
