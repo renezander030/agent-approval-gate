@@ -9,6 +9,9 @@ check the approval offline, without trusting the platform that ran the gate.
 `adapter.py` is a reference, not an SDK. It needs only the standard library and
 `rfc8785`.
 
+The approval's `decided_at` and authentication time preserve the receipt's signed
+`createdAt` value, including its fractional seconds and timezone offset.
+
 ## Flow
 
 ```text

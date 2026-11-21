@@ -27,7 +27,7 @@ import rfc8785
 
 DEFAULT_BASE_URL = "https://app.permissionprotocol.com"
 KEY_SET_PATH = "/.well-known/permission-protocol/keys.json"
-SCHEMA_VERSION = "3.4.0"
+SCHEMA_VERSION = "3.4.1"
 
 
 def digest(value: Any) -> str:
@@ -151,7 +151,7 @@ def approval_record(
 ) -> dict[str, Any]:
     """An ApprovalRecord for the decision the receipt signs. ``approver`` is the gate's identity for the signer."""
     payload = json.loads(base64.b64decode(artifact["payload_bytes_b64"]))
-    decided_at = payload["createdAt"].split(".")[0] + "Z"
+    decided_at = payload["createdAt"]
     decision = {"APPROVED": "approved", "DENIED": "rejected"}[payload["status"]]
     if decision == "rejected" and rejection_settlement is None:
         raise ValueError("a denied receipt needs the rejection_settlement the gate recorded")

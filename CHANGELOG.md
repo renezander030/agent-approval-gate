@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.4.1
+
+### Fixed
+
+- Preserve the signed receipt timestamp in Permission Protocol approval records,
+  including fractional seconds and timezone offsets. Whole-second UTC timestamps
+  remain valid without an extra `Z`.
+- Return validation errors for non-string `requestJson` values in signed receipts
+  instead of raising a parsing exception.
+
 ## 3.4.0
 
 An approval whose signing key the gate's own platform does not hold.

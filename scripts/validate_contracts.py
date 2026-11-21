@@ -335,7 +335,7 @@ def permission_protocol_signature_errors(approval: dict[str, Any]) -> list[str]:
             errors.append(f"{prefix} idemKey does not bind this request and action_hash")
         try:
             request_json = strict_json_loads(payload.get("requestJson", ""))
-        except ValueError:
+        except (TypeError, ValueError):
             request_json = None
         constraints = request_json.get("constraints") if isinstance(request_json, dict) else None
         if not isinstance(constraints, dict) or constraints.get("idempotencyKey") != binding:

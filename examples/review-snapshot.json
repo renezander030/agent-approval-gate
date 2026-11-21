@@ -1,8 +1,8 @@
 {
-  "schema_version": "3.4.0",
+  "schema_version": "3.4.1",
   "snapshot_id": "review_2026-04-28_47b2c000",
   "proposal_id": "prop_2026-04-28_b3f1a2c4",
-  "action_hash": "sha256:fa91547ede90b5e71af350eeed3be5272dc40be522a84a6e32045ef8f4db1e64",
+  "action_hash": "sha256:b956a738ffe6bc83b3a08677886601d3441cdc5bc3f5e3c680384b96a4c205a9",
   "payload_hash": "sha256:c919182dcf3aa49d95f5927636aeb7a6a227fa9f9b3daa7384ac4c531a9f891b",
   "content_hash": "sha256:8c01b7a1cb615599ad2a3e2f36a282099ae522ed9115b14a7aec593be55b0d00",
   "rendered_at": "2026-04-28T09:14:26Z",
