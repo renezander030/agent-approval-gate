@@ -335,7 +335,7 @@ def permission_protocol_signature_errors(approval: dict[str, Any]) -> list[str]:
             errors.append(f"{prefix} idemKey does not bind this request and action_hash")
         try:
             request_json = strict_json_loads(payload.get("requestJson", ""))
-        except ValueError:
+        except (TypeError, ValueError):
             request_json = None
         constraints = request_json.get("constraints") if isinstance(request_json, dict) else None
         if not isinstance(constraints, dict) or constraints.get("idempotencyKey") != binding:
@@ -1837,6 +1837,16 @@ def n8n_reference_errors() -> list[str]:
     return errors
 
 
+def vector_corpora() -> list[str]:
+    """Every test corpus of positive and negative vectors under tests/, so a new release corpus is never skipped."""
+    found = []
+    for path in sorted((ROOT / "tests").glob("*.json")):
+        corpus = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(corpus, dict) and "positive" in corpus and "negative" in corpus:
+            found.append(str(path.relative_to(ROOT)))
+    return found
+
+
 def validate_repository() -> list[str]:
     failures: list[str] = []
     schemas, registry = schema_catalog()
@@ -1847,8 +1857,18 @@ def validate_repository() -> list[str]:
             failures.append(f"{path}: $id is not pinned to v{version}")
         if "/main/" in identifier:
             failures.append(f"{path}: $id points at mutable main")
+    # Copy-paste install lines name the action release; they must name this one.
+    for doc in ("README.md", "docs/contracts.md"):
+        for pinned in sorted(set(re.findall(r"agent-approval-gate@v([0-9][0-9A-Za-z.+-]*)", (ROOT / doc).read_text(encoding="utf-8")))):
+            if pinned != version:
+                failures.append(f"{doc}: uses agent-approval-gate@v{pinned}, not v{version}")
+    # Records carry schema_version as this const; it must be the release VERSION names, like every $id.
+    common = schemas.get("schemas/common.schema.json", {})
+    const = common.get("$defs", {}).get("schema_version", {}).get("const")
+    if const != version:
+        failures.append(f"schemas/common.schema.json: schema_version const {const!r} is not VERSION {version}")
 
-    for corpus_path in ("tests/conformance.json", "tests/adversarial.json", "tests/hardening.json", "tests/release-3.1.json", "tests/release-3.2.json", "tests/release-3.3.json", "tests/release-3.4.json"):
+    for corpus_path in vector_corpora():
         corpus = load(corpus_path)
         for vector in corpus["positive"]:
             validator = validator_for(vector["schema"], schemas, registry)

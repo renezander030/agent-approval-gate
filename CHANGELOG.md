@@ -1,5 +1,24 @@
 # Changelog
 
+## 3.4.1
+
+### Fixed
+
+- Preserve the signed receipt timestamp in Permission Protocol approval records,
+  including fractional seconds and timezone offsets. Whole-second UTC timestamps
+  remain valid without an extra `Z`.
+- Return validation errors for non-string `requestJson` values in signed receipts
+  instead of raising a parsing exception.
+- The reference adapter refuses a receipt whose issuer key is missing from the retained
+  key set with `ValueError`, like a revoked key, instead of an unhandled `StopIteration`.
+
+### Changed
+
+- The composite action pins `actions/setup-python` to a full commit, so a pinned release
+  of this action fixes everything it runs.
+- The repository check requires the common `schema_version` constant to equal `VERSION`
+  and validates every vector corpus under `tests/` without a hand-kept list.
+
 ## 3.4.0
 
 An approval whose signing key the gate's own platform does not hold.

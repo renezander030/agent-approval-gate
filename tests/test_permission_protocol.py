@@ -122,6 +122,14 @@ class ReceiptApprovalTests(unittest.TestCase):
         self.resign(payload)
         self.assertRefused("signed request does not carry the binding")
 
+    def test_non_string_signed_request_is_refused(self) -> None:
+        for value in (42, True, [], {}, None):
+            with self.subTest(request_json=value):
+                payload = self.payload()
+                payload["requestJson"] = value
+                self.resign(payload)
+                self.assertRefused("signed request does not carry the binding")
+
     def test_denial_cannot_back_an_approval(self) -> None:
         payload = self.payload()
         payload["status"] = "DENIED"
@@ -196,10 +204,54 @@ class AdapterTests(unittest.TestCase):
         )
         self.assertEqual(body["action"]["parameters"], proposal["payload"])
 
+    def test_approval_preserves_the_signed_timestamp(self) -> None:
+        for timestamp in (
+            "2026-04-28T09:14:30Z",
+            "2026-04-28T09:14:30.000Z",
+            "2026-04-28T09:14:30.123456Z",
+            "2026-04-28T09:14:30.123456789Z",
+            "2026-04-28T10:14:30.125+01:00",
+            "2026-04-28T04:14:30-05:00",
+        ):
+            with self.subTest(timestamp=timestamp):
+                payload = json.loads(base64.b64decode(self.artifact["payload_bytes_b64"]))
+                payload["createdAt"] = timestamp
+                payload_bytes = permission_protocol_canonical_bytes(payload)
+                payload_digest = hashlib.sha256(payload_bytes).digest()
+                artifact = dict(
+                    self.artifact,
+                    payload_bytes_b64=base64.b64encode(payload_bytes).decode(),
+                    signed_payload_hash=payload_digest.hex(),
+                    signature_b64=base64.b64encode(
+                        permission_protocol_example_key().sign(payload_digest)
+                    ).decode(),
+                )
+                approval = self.envelope["approvals"][0]
+                record = adapter.approval_record(
+                    artifact, self.key_set,
+                    approval_id=approval["approval_id"], request_id=approval["request_id"],
+                    request_revision=approval["request_revision"],
+                    proposal_id=approval["proposal_id"], action_hash=approval["action_hash"],
+                    payload_hash=approval["payload_hash"],
+                    review_snapshot=self.envelope["review_snapshots"][-1],
+                    approver={"identifier": "approver@example.com"},
+                    recorded_at="2026-04-28T09:14:31Z", key_set_uri="urn:example:keys",
+                    policy_evaluation_id=approval["policy_evaluation_id"],
+                )
+                self.assertEqual(record["decided_at"], timestamp)
+                self.assertEqual(record["decided_by"]["authentication"]["authenticated_at"], timestamp)
+                self.assertEqual(record_errors("approval-record", record), [])
+
     def test_revoked_issuer_key_is_refused(self) -> None:
         key_set = deepcopy(self.key_set)
         key_set["keys"][0]["status"] = "revoked"
         with self.assertRaises(ValueError):
+            adapter.receipt_signature(self.artifact, key_set, key_set_uri="urn:test")
+
+    def test_unknown_issuer_key_is_refused(self) -> None:
+        key_set = deepcopy(self.key_set)
+        key_set["keys"] = [key for key in key_set["keys"] if key["key_id"] != self.artifact["key_id"]]
+        with self.assertRaisesRegex(ValueError, "is not in the key set"):
             adapter.receipt_signature(self.artifact, key_set, key_set_uri="urn:test")
 
     def test_artifact_hash_mismatch_is_refused(self) -> None:

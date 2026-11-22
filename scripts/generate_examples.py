@@ -26,6 +26,7 @@ from validate_contracts import (  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples"
 SCHEMAS = ROOT / "schemas"
+VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
 
 def load(name: str) -> Any:
@@ -574,7 +575,7 @@ def main() -> None:
             event["references"]["audit_snapshot_id"] = audit_snapshot["snapshot_id"]
 
     envelope = {
-        "schema_version": "3.4.0",
+        "schema_version": VERSION,
         "captured_at": "2026-04-28T09:14:35Z",
         "proposal": proposal,
         "validations": [validation],
