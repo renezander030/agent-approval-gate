@@ -248,6 +248,12 @@ class AdapterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             adapter.receipt_signature(self.artifact, key_set, key_set_uri="urn:test")
 
+    def test_unknown_issuer_key_is_refused(self) -> None:
+        key_set = deepcopy(self.key_set)
+        key_set["keys"] = [key for key in key_set["keys"] if key["key_id"] != self.artifact["key_id"]]
+        with self.assertRaisesRegex(ValueError, "is not in the key set"):
+            adapter.receipt_signature(self.artifact, key_set, key_set_uri="urn:test")
+
     def test_artifact_hash_mismatch_is_refused(self) -> None:
         artifact = dict(self.artifact, signed_payload_hash="0" * 64)
         with self.assertRaises(ValueError):

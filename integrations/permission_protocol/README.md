@@ -12,6 +12,11 @@ check the approval offline, without trusting the platform that ran the gate.
 The approval's `decided_at` and authentication time preserve the receipt's signed
 `createdAt` value, including its fractional seconds and timezone offset.
 
+`receipt_signature` and `approval_record` raise `ValueError` instead of returning a
+result for a receipt whose key is missing from or revoked in the retained key set, whose
+payload does not match its `signed_payload_hash`, or that denies without the gate's
+rejection settlement.
+
 ## Flow
 
 ```text
